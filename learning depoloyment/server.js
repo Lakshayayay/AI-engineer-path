@@ -1,9 +1,13 @@
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import helmet from 'helmet'
+import helmet from 'helmet';
+import dotenv from 'dotenv';
 import { initDatabase } from './config/database-init.js';
 import dreamsRouter from './routes/dreams.js';
+
+// Load environment variables from .env file
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
