@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import dotenv from "dotenv";
 
 // Load environment variables from .env file
-dotenv.config();
+dotenv.config(); // read the env files and populate them with 
 
 const app = express();
 app.use(express.json());
@@ -71,7 +71,8 @@ Here are 3 simulated gift ideas based on your prompt: **"${userPrompt}"**
 1. What is the approximate age and main interests of the recipient?
 2. Do you prefer a physical keepsake or an experiential gift?`.split(" ");
 
-  // Stream word by word with a slight delay
+  // Stream word by word with a slight delay // here the streaming is happeining word by word
+  // but nothing else
   for (let i = 0; i < words.length; i++) {
     const chunk = words[i] + " ";
     res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
@@ -81,7 +82,8 @@ Here are 3 simulated gift ideas based on your prompt: **"${userPrompt}"**
   res.end();
 }
 
-app.post("/api/gift", async (req, res) => {
+app.post("/api/gift", async (req, res) => { // backend api request which enables to get the response
+  
   const { userPrompt } = req.body;
 
   if (!userPrompt) {
@@ -92,6 +94,7 @@ app.post("/api/gift", async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
+  
 
   // Fallback if OpenAI is not initialized
   if (!openai) {
