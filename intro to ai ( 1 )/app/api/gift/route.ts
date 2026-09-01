@@ -45,7 +45,7 @@ Here are 3 curated gift ideas based on your wish: **"${userPrompt}"**
       for (let i = 0; i < words.length; i++) {
         const chunk = words[i] + " ";
         // Standard SSE format: "data: {"chunk": "word "}\n\n"
-        const payload = `data: ${JSON.stringify({ chunk })}\n\n`;
+        const payload = `data: ${JSON.stringify({ chunk: chunk })}\n\n`;
         controller.enqueue(encoder.encode(payload));
 
         // 25ms delay between words
@@ -65,10 +65,10 @@ Here are 3 curated gift ideas based on your wish: **"${userPrompt}"**
  * ==============================================================================
  * 1. Receives { userPrompt } from the frontend.
  * 2. Validates it with Zod (stops invalid/empty input).
- * 3. Calls OpenAI with streaming enabled.
+ * 3. Calls OpenAI Responses API with the web_search tool and streaming enabled.
  * 4. Pushes tokens chunk-by-chunk to the client using Server-Sent Events (SSE).
  */
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     // ------------------------------------------------------------------------
     // STEP 1: Parse and validate request body with Zod
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     // ------------------------------------------------------------------------
     if (!client) {
       console.warn("AI_KEY not configured. Streaming simulated mock response.");
-      return new Response(createMockStream(userPrompt), {
+      return new NextResponse(createMockStream(userPrompt), {
         headers: {
           "Content-Type": "text/event-stream; charset=utf-8",
           "Cache-Control": "no-cache, no-transform",
@@ -100,31 +100,29 @@ export async function POST(req: NextRequest) {
     }
 
     // ------------------------------------------------------------------------
-    // STEP 3: Live OpenAI Chat Completion with Streaming (SSE)
+    // STEP 3: Live OpenAI Responses API with Streaming & Web Search Tool
     // ------------------------------------------------------------------------
-    const encoder = new TextEncoder();
+    const encoder = new TextEncoder(); // converts data into bytes so the stream can send it
 
-    const stream = new ReadableStream({
+    const stream = new ReadableStream({ // standard streams api (modern web world)
       async start(controller) {
         try {
-          const modelName = process.env.AI_MODEL || "gpt-4o-mini";
+          const modelName = process.env.AI_MODEL || "gpt-4o";
 
-          // Request streamed completion from OpenAI SDK
-          const responseStream = await client.chat.completions.create({
+          // Request streamed response from OpenAI Responses API with web search tool
+          const responseStream = await (client as any).responses.create({
             model: modelName,
-            messages: [
-              { role: "system", content: SYSTEM_INSTRUCTIONS },
-              { role: "user", content: userPrompt },
-            ],
-            stream: true, // 👈 Asks OpenAI to send tokens progressively
+            instructions: SYSTEM_INSTRUCTIONS,
+            input: userPrompt,
+            tools: [{ type: "web_search" }], // 👈 Enables live web search tool
+            stream: true,                    // 👈 Asks OpenAI to send tokens progressively
           });
 
-          // Read each token delta as it arrives from OpenAI
-          for await (const chunk of responseStream) {
-            const content = chunk.choices[0]?.delta?.content || "";
-            if (content) {
+          // Read each event delta as it arrives from OpenAI Responses API
+          for await (const event of responseStream) {
+            if (event.type === "response.output_text.delta" && event.delta) {
               // Format according to Server-Sent Events (SSE) standard
-              const payload = `data: ${JSON.stringify({ chunk: content })}\n\n`;
+              const payload = `data: ${JSON.stringify({ chunk: event.delta })}\n\n`;
               controller.enqueue(encoder.encode(payload));
             }
           }
@@ -152,9 +150,9 @@ export async function POST(req: NextRequest) {
     });
 
     // ------------------------------------------------------------------------
-    // STEP 4: Return Stream Response with SSE Headers
+    // STEP 4: Return Stream Response using NextResponse with SSE Headers
     // ------------------------------------------------------------------------
-    return new Response(stream, {
+    return new NextResponse(stream, {
       headers: {
         "Content-Type": "text/event-stream; charset=utf-8", // Tells browser: Expect live stream
         "Cache-Control": "no-cache, no-transform",         // Disables proxy buffering

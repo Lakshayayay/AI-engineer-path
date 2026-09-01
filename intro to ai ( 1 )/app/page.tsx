@@ -1,4 +1,4 @@
-"use client";
+"use client"; // Marks this as a Client Component for browser interactivity and state management
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Header } from "@/components/Header";
@@ -10,85 +10,90 @@ import { initAuth, signOut, isFirebaseEnabled } from "@/lib/auth";
 import { saveConversation, getConversationHistory } from "@/lib/db";
 import { AppUser, HistoryItem } from "@/lib/types";
 
-/**
- * ==============================================================================
- * MAIN APPLICATION CONTROLLER (React Client Component)
- * ==============================================================================
- * This component coordinates:
- * 1. UI State (Prompts, loading animations, sidebar drawers).
- * 2. Real-time token streaming from /api/gift via the Fetch Streams API.
- * 3. User Authentication state (Firebase Cloud or LocalStorage fallback).
- * 4. Wish History persistence.
- */
 export default function Home() {
   // --------------------------------------------------------------------------
   // STATE MANAGEMENT
   // --------------------------------------------------------------------------
-  
-  // Auth & Mode state
+
+  // Stores current logged-in user profile (or null if guest)
   const [user, setUser] = useState<AppUser | null>(null);
+
+  // Tracks if Firebase is active (true) or running in local offline mode (false)
   const [isFirebase, setIsFirebase] = useState<boolean>(false);
+
+  // Controls visibility of the login/register popup modal
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+
+  // Controls opening and closing of the mobile sidebar drawer
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
-  // AI Generation & Streaming state
+  // Holds the user's typed prompt in the textarea
   const [prompt, setPrompt] = useState<string>("");
-  const [outputText, setOutputText] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(false);     // Lamp animation / button disable
-  const [isStreaming, setIsStreaming] = useState<boolean>(false); // Blinking cursor animation
-  const [hasResult, setHasResult] = useState<boolean>(false);     // Output container reveal
 
-  // Past Wishes History
+  // Holds the AI's generated response text (accumulates token-by-token)
+  const [outputText, setOutputText] = useState<string>("");
+
+  // Controls the submit button disable state and animated lamp loading state
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // Controls the blinking streaming cursor (▊) while receiving tokens
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
+
+  // Controls showing/revealing the output result card on screen
+  const [hasResult, setHasResult] = useState<boolean>(false);
+
+  // Stores the list of previous saved wishes in the sidebar
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
-  // Ref holds active user reference inside async streaming closures
+  // Ref container holding the latest user object to avoid stale closures during streaming
   const userRef = useRef<AppUser | null>(null);
-  userRef.current = user;
+  userRef.current = user; // Continuously keep ref in sync with active user state
 
   // --------------------------------------------------------------------------
   // AUTH & HISTORY LIFECYCLE
   // --------------------------------------------------------------------------
 
-  // Fetch past wishes for the logged-in user
+  // Memoized function to fetch saved wishes from DB/localStorage for a given user
   const refreshHistory = useCallback(async (userId: string) => {
     try {
-      const items = await getConversationHistory(userId);
-      setHistory(items);
+      const items = await getConversationHistory(userId); // Fetch from database service
+      setHistory(items); // Update history state list
     } catch (err) {
-      console.error("Failed to load history:", err);
+      console.error("Failed to load history:", err); // Log error if database fails
     }
   }, []);
 
-  // Listen to Auth changes on page load
+  // Effect that runs once when the page first loads
   useEffect(() => {
-    setIsFirebase(isFirebaseEnabled());
+    setIsFirebase(isFirebaseEnabled()); // Check if Firebase credentials exist
 
+    // Start listening to auth state changes (login, signup, logout)
     initAuth((activeUser) => {
-      setUser(activeUser);
+      setUser(activeUser); // Update active user state
       if (activeUser) {
-        refreshHistory(activeUser.uid);
+        refreshHistory(activeUser.uid); // Fetch history if user is signed in
       } else {
-        setHistory([]);
+        setHistory([]); // Clear history list if logged out
       }
     });
   }, [refreshHistory]);
 
-  // Handle Logout
+  // Logs the user out and clears state
   const handleLogout = async () => {
-    await signOut();
-    setUser(null);
-    setHistory([]);
+    await signOut(); // Clear auth session
+    setUser(null); // Reset user state
+    setHistory([]); // Clear history list
   };
 
-  // Clicking an item from history loads it instantly without re-calling the AI
+  // Clicking an item from history loads it instantly without calling OpenAI
   const handleSelectHistory = (item: HistoryItem) => {
-    setPrompt(item.prompt);
-    setOutputText(item.responseText);
-    setHasResult(true);
-    setIsLoading(false);
-    setIsStreaming(false);
+    setPrompt(item.prompt); // Set input box to past question
+    setOutputText(item.responseText); // Set output box to saved response
+    setHasResult(true); // Reveal the output card
+    setIsLoading(false); // Make sure loading spinner is off
+    setIsStreaming(false); // Make sure cursor isn't blinking
 
-    // Scroll smoothly to output
+    // Smoothly scroll down to output on smaller screens
     window.scrollTo({ top: 300, behavior: "smooth" });
   };
 
@@ -96,141 +101,145 @@ export default function Home() {
   // AI STREAMING REQUEST LIFECYCLE (Fetch Streams API)
   // --------------------------------------------------------------------------
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanPrompt = prompt.trim();
-    if (!cleanPrompt || isLoading) return;
+    e.preventDefault(); // Prevent standard browser form refresh
+    const cleanPrompt = prompt.trim(); // Remove surrounding whitespace
+    if (!cleanPrompt || isLoading) return; // Ignore if prompt is empty or already loading
 
-    // 1. Enter Loading State: Animate lamp & prepare output container
-    setIsLoading(true);
-    setIsStreaming(true);
-    setOutputText("");
-    setHasResult(true);
+    // 1. Enter Loading State
+    setIsLoading(true); // Disable submit button & start lamp animation
+    setIsStreaming(true); // Turn on blinking cursor
+    setOutputText(""); // Clear any old output text
+    setHasResult(true); // Make the output container visible
 
     try {
-      // 2. Send POST request to our Next.js Route Handler
+      // 2. Send POST request to our Next.js Route Handler (/api/gift)
       const response = await fetch("/api/gift", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userPrompt: cleanPrompt }),
+        headers: { "Content-Type": "application/json" }, // Specify JSON format
+        body: JSON.stringify({ userPrompt: cleanPrompt }), // Send prompt in request body
       });
 
+      // Throw error if server returns non-200 status code
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.message || `Server responded with ${response.status}`);
       }
 
+      // Ensure stream body exists on response
       if (!response.body) {
         throw new Error("No readable stream received from server.");
       }
 
-      // 3. Attach a Stream Reader to process bytes as they arrive from the server
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulated = "";
-      let sseBuffer = "";
+      // 3. Attach a Stream Reader to read incoming binary bytes progressively
+      const reader = response.body.getReader(); // Get reader from standard stream
+      const decoder = new TextDecoder(); // Converts raw bytes to string characters
+      let accumulated = ""; // Stores the full incoming text
+      let sseBuffer = ""; // Buffer to handle partial network chunks
 
+      // Loop continuously while data is streaming
       while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        const { done, value } = await reader.read(); // Read next chunk from network
+        if (done) break; // Exit loop when stream is finished
 
-        // Decode incoming raw binary chunks to UTF-8 string
+        // Decode bytes to text string
         const chunkText = decoder.decode(value, { stream: true });
-        sseBuffer += chunkText;
+        sseBuffer += chunkText; // Append to stream buffer
 
-        // Parse Server-Sent Events (SSE) format: "data: {"chunk": "..."}\n\n"
+        // Split by newlines to process SSE events
         const lines = sseBuffer.split("\n");
-        // Keep trailing uncompleted line fragment in buffer
-        sseBuffer = lines.pop() || "";
+        sseBuffer = lines.pop() || ""; // Retain incomplete trailing line in buffer
 
+        // Process each complete SSE line
         for (const line of lines) {
           const cleaned = line.trim();
-          if (!cleaned) continue;
+          if (!cleaned) continue; // Skip empty lines
 
+          // Check for standard SSE prefix "data: "
           if (cleaned.startsWith("data: ")) {
-            const dataStr = cleaned.slice(6).trim();
+            const dataStr = cleaned.slice(6).trim(); // Extract JSON payload after "data: "
 
-            // Check for completion signal
+            // Check if server sent completion signal
             if (dataStr === "[DONE]") {
               break;
             }
 
             try {
-              const parsed = JSON.parse(dataStr);
+              const parsed = JSON.parse(dataStr); // Parse chunk JSON object
               if (parsed.chunk) {
-                accumulated += parsed.chunk;
-                // Update React state in real time as each token arrives
-                setOutputText(accumulated);
+                accumulated += parsed.chunk; // Add word to full text
+                setOutputText(accumulated); // Update React state live on each token!
               }
             } catch {
-              // Ignore partial JSON parse errors while buffer is accumulating
+              // Ignore JSON parse errors for incomplete chunk fragments
             }
           }
         }
       }
 
-      // 4. Save the generated wish into database/localStorage if user is logged in
+      // 4. Save generated wish to history database if user is logged in
       const currentUser = userRef.current;
       if (currentUser && accumulated.trim()) {
-        await saveConversation(currentUser.uid, cleanPrompt, accumulated);
-        refreshHistory(currentUser.uid);
+        await saveConversation(currentUser.uid, cleanPrompt, accumulated); // Save to Firestore/localStorage
+        refreshHistory(currentUser.uid); // Refresh sidebar history list
       }
     } catch (err: any) {
-      console.error("AI Generation Error:", err);
+      console.error("AI Generation Error:", err); // Log error in console
       setOutputText(
         err?.message ||
           "Sorry, I couldn't reach the magical lamp service. Please try again in a bit."
       );
     } finally {
-      // 5. Exit Loading State: Restore lamp button and stop blinking cursor
-      setIsLoading(false);
-      setIsStreaming(false);
+      // 5. Exit Loading State
+      setIsLoading(false); // Re-enable submit button
+      setIsStreaming(false); // Stop blinking cursor
     }
   };
 
   return (
     <div className="dashboard-layout">
-      {/* Sidebar for Navigation, Auth profile, and Recent Wishes History */}
+      {/* Sidebar for Navigation, User Profile, and Saved History */}
       <Sidebar
         isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        user={user}
-        isFirebase={isFirebase}
-        onOpenAuth={() => setIsAuthModalOpen(true)}
-        onLogout={handleLogout}
-        history={history}
-        onSelectHistory={handleSelectHistory}
+        onClose={() => setIsSidebarOpen(false)} // Close sidebar on mobile
+        user={user} // Pass active user profile
+        isFirebase={isFirebase} // Pass mode flag
+        onOpenAuth={() => setIsAuthModalOpen(true)} // Open auth modal
+        onLogout={handleLogout} // Pass logout action
+        history={history} // Pass saved history list
+        onSelectHistory={handleSelectHistory} // Handle clicking a history item
       />
 
-      {/* Main Content Area */}
+      {/* Main App Container */}
       <div className="app-container">
+        {/* Top Header with title and mobile menu toggle */}
         <Header
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
           isFirebase={isFirebase}
         />
 
         <main className="main-content">
-          {/* Input Form & Magic Lamp CTA */}
+          {/* User Input Textarea and Magic Lamp CTA Button */}
           <GiftForm
             prompt={prompt}
-            onChangePrompt={setPrompt}
-            onSubmit={handleSubmit}
-            isLoading={isLoading}
-            hasResult={hasResult}
+            onChangePrompt={setPrompt} // Update prompt state on typing
+            onSubmit={handleSubmit} // Trigger AI stream on submit
+            isLoading={isLoading} // Loading animation state
+            hasResult={hasResult} // Compact button state
           />
 
-          {/* Real-time Streamed Markdown Output */}
+          {/* Real-time Streamed Markdown Output Card */}
           <OutputDisplay
-            content={outputText}
-            isStreaming={isStreaming}
-            isVisible={hasResult || Boolean(outputText)}
+            content={outputText} // Pass accumulated response text
+            isStreaming={isStreaming} // Control blinking cursor
+            isVisible={hasResult || Boolean(outputText)} // Visibility flag
           />
         </main>
       </div>
 
-      {/* Auth Modal (Sign In / Register / Google OAuth) */}
+      {/* Authentication Modal Dialog (Sign In / Register / Google OAuth) */}
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={() => setIsAuthModalOpen(false)} // Close modal
       />
     </div>
   );
