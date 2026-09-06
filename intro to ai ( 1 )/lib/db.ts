@@ -14,6 +14,7 @@ import { HistoryItem } from "./types";
  * create table public.wishes (
  *   id uuid primary key default gen_random_uuid(),
  *   user_id uuid references auth.users(id) on delete cascade not null,
+ *   session_id uuid not null default gen_random_uuid(),
  *   prompt text not null,
  *   response_text text not null,
  *   created_at timestamp with time zone default now()
@@ -22,6 +23,7 @@ import { HistoryItem } from "./types";
  * create policy "Users read own" on public.wishes for select using (auth.uid() = user_id);
  * create policy "Users insert own" on public.wishes for insert with check (auth.uid() = user_id);
  * ---
+ * See supabase/migrations/0001_add_session_id.sql if this table predates session_id.
  */
 
 /**
@@ -29,17 +31,18 @@ import { HistoryItem } from "./types";
  */
 export async function saveConversation(
   userId: string,
+  sessionId: string,
   prompt: string,
   responseText: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
 
-  if (isSupabaseEnabled()) {
+  if (isSupabaseEnabled() && userId && userId !== "guest") {
     // Save to Supabase PostgreSQL
     const { createClient } = await import("./supabase/client");
     const supabase = createClient();
     const { data, error } = await supabase
       .from("wishes")
-      .insert({ user_id: userId, prompt, response_text: responseText })
+      .insert({ user_id: userId, session_id: sessionId, prompt, response_text: responseText })
       .select("id")
       .single();
 
@@ -58,7 +61,7 @@ export async function saveConversation(
     );
     const id = "hist_" + Math.random().toString(36).substring(2, 11);
     // Prepend newest wish to top of list
-    history.unshift({ id, prompt, responseText, timestamp: Date.now() });
+    history.unshift({ id, sessionId, prompt, responseText, timestamp: Date.now() });
     localStorage.setItem(historyKey, JSON.stringify(history));
     return { success: true, id };
   } catch (error: any) {
@@ -68,17 +71,17 @@ export async function saveConversation(
 }
 
 /**
- * getConversationHistory — Fetch all saved wishes for a specific user
+ * getConversationHistory — Fetch all saved wishes (every turn, every session) for a user
  */
 export async function getConversationHistory(userId: string): Promise<HistoryItem[]> {
 
-  if (isSupabaseEnabled()) {
+  if (isSupabaseEnabled() && userId && userId !== "guest") {
     // Fetch from Supabase PostgreSQL
     const { createClient } = await import("./supabase/client");
     const supabase = createClient();
     const { data, error } = await supabase
       .from("wishes")
-      .select("id, prompt, response_text, created_at")
+      .select("id, session_id, prompt, response_text, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
@@ -90,6 +93,7 @@ export async function getConversationHistory(userId: string): Promise<HistoryIte
     // Map Supabase column names to our HistoryItem interface
     return (data || []).map((row: any) => ({
       id: row.id,
+      sessionId: row.session_id,
       prompt: row.prompt,
       responseText: row.response_text,
       timestamp: new Date(row.created_at).getTime(),
@@ -105,7 +109,9 @@ function loadLocalHistory(userId: string): HistoryItem[] {
   if (typeof window === "undefined") return [];
   try {
     const historyKey = `mock_history_${userId}`;
-    return JSON.parse(localStorage.getItem(historyKey) || "[]");
+    const items: HistoryItem[] = JSON.parse(localStorage.getItem(historyKey) || "[]");
+    // Entries saved before sessionId existed each become their own session
+    return items.map((item) => ({ ...item, sessionId: item.sessionId || item.id }));
   } catch (error) {
     console.error("Error parsing local history:", error);
     return [];
