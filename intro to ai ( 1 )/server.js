@@ -1,6 +1,6 @@
 import express from "express";
 import OpenAI from "openai";
-import dotenv from "dotenv";
+import dotenv from "dotenv"; // basically the old
 
 // Load environment variables from .env file
 dotenv.config(); // read the env files and populate them with 
@@ -84,13 +84,13 @@ Here are 3 simulated gift ideas based on your prompt: **"${userPrompt}"**
 
 app.post("/api/gift", async (req, res) => { // backend api request which enables to get the response
   
-  const { userPrompt } = req.body;
+  const { userPrompt } = req.body; // there must be a frontend part which would be an html
 
   if (!userPrompt) {
     return res.status(400).json({ message: "Prompt is required" });
   }
 
-  // Setup SSE headers
+  // Setup SSE headers for streaming with token speed feature
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");

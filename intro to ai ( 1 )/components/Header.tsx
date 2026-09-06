@@ -4,14 +4,14 @@ import React from "react";
 
 interface HeaderProps {
   onToggleSidebar: () => void;
-  isFirebase: boolean;
+  isSupabase: boolean;
 }
 
 /**
  * App Header Component
  * Displays branding, mobile navigation toggle, and current environment status badge.
  */
-export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isFirebase }) => {
+export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSupabase }) => {
   return (
     <header className="app-header">
       <div className="header-left">
@@ -34,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isFirebase }) =
       </div>
       <div className="header-right">
         <span className="active-mode-indicator">
-          {isFirebase ? "Firebase Mode" : "Local Mode"}
+          {isSupabase ? "Supabase Mode" : "Local Mode"}
         </span>
       </div>
     </header>

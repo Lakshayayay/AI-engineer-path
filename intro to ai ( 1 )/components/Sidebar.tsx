@@ -8,7 +8,7 @@ interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   user: AppUser | null;
-  isFirebase: boolean;
+  isSupabase: boolean;
   onOpenAuth: () => void;
   onLogout: () => void;
   history: HistoryItem[];
@@ -28,7 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onClose,
   user,
-  isFirebase,
+  isSupabase,
   onOpenAuth,
   onLogout,
   history,
@@ -64,8 +64,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="user-details">
               <div className="user-name">{user.displayName || "Genie User"}</div>
               <div className="user-email">{user.email}</div>
-              <span className={`mode-badge ${isFirebase ? "firebase" : ""}`}>
-                {isFirebase ? "Firebase Mode" : "Local Mode"}
+              <span className={`mode-badge ${isSupabase ? "supabase" : ""}`}>
+                {isSupabase ? "Supabase Mode" : "Local Mode"}
               </span>
             </div>
             <button

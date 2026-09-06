@@ -35,7 +35,7 @@ cp .env.example .env   # Fill in your keys
 npm run dev
 ```
 
-No keys? The app runs in offline mock mode — all features work locally.
+No keys? The app also runs in offline mock mode — all features work locally.
 
 ---
 

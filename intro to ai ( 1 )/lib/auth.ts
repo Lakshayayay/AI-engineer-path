@@ -21,8 +21,6 @@ export const isSupabaseEnabled = (): boolean =>
     process.env.NEXT_PUBLIC_SUPABASE_URL.trim() !== ""
   );
 
-// Legacy alias — used in app/page.tsx to display auth mode badge
-export const isFirebaseEnabled = isSupabaseEnabled;
 
 // Hold a reference to the current auth state change listener
 let authListener: ((user: AppUser | null) => void) | null = null;

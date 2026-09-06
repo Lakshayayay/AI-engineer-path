@@ -1,44 +1,99 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content?: string;
+  parts?: Array<{ type: string; text?: string }>;
+}
+
 interface OutputDisplayProps {
-  content: string;
+  messages?: ChatMessage[];
+  content?: string;
   isStreaming: boolean;
   isVisible: boolean;
 }
 
+function getMessageText(message: ChatMessage): string {
+  if (typeof message.content === "string") return message.content;
+  if (Array.isArray(message.parts)) {
+    return message.parts
+      .filter((p) => p.type === "text" && typeof p.text === "string")
+      .map((p) => p.text || "")
+      .join("");
+  }
+  return "";
+}
+
+function renderMarkdown(rawText: string): string {
+  if (!rawText) return "";
+  try {
+    const rawHtml = marked.parse(rawText) as string;
+    if (typeof window !== "undefined") {
+      return DOMPurify.sanitize(rawHtml);
+    }
+    return rawHtml;
+  } catch (err) {
+    console.error("Markdown parsing error:", err);
+    return rawText;
+  }
+}
+
 /**
  * ==============================================================================
- * OUTPUT DISPLAY & MARKDOWN RENDERER
+ * OUTPUT DISPLAY & CONVERSATION THREAD RENDERER
  * ==============================================================================
- * 1. Takes raw streamed text from the AI.
- * 2. Parses Markdown headers (###), bold tags (**bold**), and lists using `marked`.
- * 3. Sanitizes HTML with `DOMPurify` to protect against XSS injection attacks.
- * 4. Shows an active blinking cursor (▊) while streaming is in progress.
+ * Supports multi-turn dialogue with memory:
+ * - Renders user wishes as question bubbles.
+ * - Renders Genie recommendations in formatted Markdown cards.
+ * - Shows an active blinking cursor (▊) on the streaming message.
  */
 export const OutputDisplay: React.FC<OutputDisplayProps> = ({
+  messages,
   content,
   isStreaming,
   isVisible,
 }) => {
-  // Re-parse Markdown and sanitize HTML whenever content updates
-  const sanitizedHtml = useMemo(() => {
-    if (!content) return "";
-    try {
-      const rawHtml = marked.parse(content) as string;
-      if (typeof window !== "undefined") {
-        return DOMPurify.sanitize(rawHtml);
-      }
-      return rawHtml;
-    } catch (err) {
-      console.error("Markdown parsing error:", err);
-      return content;
-    }
-  }, [content]);
+  // Multi-turn conversation rendering (from useChat)
+  if (messages && messages.length > 0) {
+    return (
+      <section className="output-section">
+        <div className={`output-container visible ${isStreaming ? "streaming-active" : ""}`}>
+          <div className="conversation-thread">
+            {messages.map((msg, idx) => {
+              const text = getMessageText(msg);
+              const isLastAssistant =
+                msg.role === "assistant" && idx === messages.length - 1 && isStreaming;
 
+              if (msg.role === "user") {
+                return (
+                  <div key={msg.id || idx} className="chat-user-message">
+                    <span className="chat-user-label">🧞‍♂️ Your Wish</span>
+                    <p className="chat-user-text">{text}</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={msg.id || idx} className="chat-assistant-message">
+                  <div
+                    className={`output-content ${isLastAssistant ? "active-stream" : ""}`}
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Fallback single-turn rendering
   if (!isVisible && !content) return null;
 
   return (
@@ -50,7 +105,7 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
       >
         <div
           className="output-content"
-          dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(content || "") }}
         />
       </div>
     </section>

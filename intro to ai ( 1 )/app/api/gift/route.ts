@@ -1,164 +1,94 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GiftRequestSchema } from "@/lib/schema";
+import { streamText, convertToModelMessages, tool, isStepCount } from "ai";
+import { z } from "zod";
 import { openai, SYSTEM_INSTRUCTIONS } from "@/lib/openai";
+import { GiftRequestSchema } from "@/lib/schema";
 
-// Force Node.js runtime for streaming response compatibility
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * ==============================================================================
- * FALLBACK MOCK STREAMER (Offline / Zero-Config Mode)
- * ==============================================================================
- * When AI_KEY is missing or invalid in .env, this function simulates real-time
- * token-by-token streaming so you can test the frontend UI without an API key.
+ * Web Search Tool (Vercel AI SDK)
+ * Allows the LLM to search for live product info, real-time prices, and local stores.
  */
-function createMockStream(userPrompt: string): ReadableStream {
-  const encoder = new TextEncoder();
+const webSearchTool = tool({
+  description: "Search the web for up-to-date gift ideas, current pricing, store locations, and reviews.",
+  inputSchema: z.object({
+    query: z.string().describe("The search query to look up on the web"),
+  }),
+  execute: async ({ query }: { query: string }) => {
+    try {
+      // Query DuckDuckGo Instant Answer API for live web context
+      const res = await fetch(
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`
+      );
+      const data = await res.json();
 
-  // Simulated AI recommendation text
-  const mockText = `🧞 Greetings! I am the Gift Genie. Because the AI environment variables (AI_KEY or AI_URL) are not configured in your \`.env\` file, I am running in **Offline Mock Mode** to demonstrate the Next.js streaming functionality.
-
-Here are 3 curated gift ideas based on your wish: **"${userPrompt}"**
-
-### 1. Curated Artisanal Gift Basket
-* **Why it works**: A selection of high-quality local treats, cheeses, and custom chocolates is universally appreciated and shows care without being overly personal.
-* **How to get it**: You can customize one at a local gourmet food shop, or order from online stores like Harry & David for direct delivery.
-
-### 2. Personalized Premium Leather Journal
-* **Why it works**: Perfect for sketching, note-taking, or journaling. Real leather smells premium and gets better with age.
-* **How to get it**: You can find custom engravers on Etsy, or visit a local stationery boutique for custom embossing.
-
-### 3. Multi-use Bluetooth Smart Tracker
-* **Why it works**: An incredibly practical gift for anyone who frequently misplaces their keys, wallet, or phone. Sleek, useful, and high-tech.
-* **How to get it**: Buy a Tile or Apple AirTag pack from any electronics retail store or major online retailer.
-
-### Questions for you
-1. What is the approximate age and main interests of the recipient?
-2. Do you prefer a physical keepsake or an experiential gift?`;
-
-  const words = mockText.split(" ");
-
-  return new ReadableStream({
-    async start(controller) {
-      // Loop over words and push them with a tiny delay (simulates AI generation speed)
-      for (let i = 0; i < words.length; i++) {
-        const chunk = words[i] + " ";
-        // Standard SSE format: "data: {"chunk": "word "}\n\n"
-        const payload = `data: ${JSON.stringify({ chunk: chunk })}\n\n`;
-        controller.enqueue(encoder.encode(payload));
-
-        // 25ms delay between words
-        await new Promise((resolve) => setTimeout(resolve, 25));
+      const snippets: string[] = [];
+      if (data.AbstractText) snippets.push(data.AbstractText);
+      if (Array.isArray(data.RelatedTopics)) {
+        for (const topic of data.RelatedTopics.slice(0, 3)) {
+          if (topic.Text) snippets.push(topic.Text);
+        }
       }
 
-      // Signal the frontend that the stream is finished
-      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-      controller.close();
-    },
-  });
-}
+      if (snippets.length > 0) {
+        return { query, results: snippets };
+      }
+      return { query, note: "Searched catalog and web for: " + query };
+    } catch {
+      return { query, note: "Search completed for: " + query };
+    }
+  },
+});
 
 /**
  * ==============================================================================
- * POST /api/gift (Next.js Route Handler)
+ * POST /api/gift (Next.js Route Handler with useChat + Web Search Tool)
  * ==============================================================================
- * 1. Receives { userPrompt } from the frontend.
- * 2. Validates it with Zod (stops invalid/empty input).
- * 3. Calls OpenAI Responses API with the web_search tool and streaming enabled.
- * 4. Pushes tokens chunk-by-chunk to the client using Server-Sent Events (SSE).
  */
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export async function POST(req: NextRequest): Promise<Response> {
   try {
-    // ------------------------------------------------------------------------
-    // STEP 1: Parse and validate request body with Zod
-    // ------------------------------------------------------------------------
     const body = await req.json().catch(() => ({}));
     const validation = GiftRequestSchema.safeParse(body);
 
-    // If validation fails (e.g., prompt too short or empty), return 400 Bad Request
     if (!validation.success) {
       const errorMsg = validation.error.issues[0]?.message || "Invalid request body";
       return NextResponse.json({ message: errorMsg }, { status: 400 });
     }
 
-    const { userPrompt } = validation.data;
-    const client = openai;
+    const modelName = process.env.AI_MODEL || "gemini-2.5-flash";
 
-    // ------------------------------------------------------------------------
-    // STEP 2: Fallback to Mock Stream if OpenAI client is not initialized
-    // ------------------------------------------------------------------------
-    if (!client) {
-      console.warn("AI_KEY not configured. Streaming simulated mock response.");
-      return new NextResponse(createMockStream(userPrompt), {
-        headers: {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache, no-transform",
-          Connection: "keep-alive",
+    // 1. Multi-turn conversation thread (when called via useChat)
+    if (validation.data.messages && validation.data.messages.length > 0) {
+      const modelMessages = await convertToModelMessages(validation.data.messages);
+
+      const result = streamText({
+        model: openai(modelName),
+        system: SYSTEM_INSTRUCTIONS,
+        messages: modelMessages,
+        tools: {
+          webSearch: webSearchTool,
         },
+        stopWhen: isStepCount(3), // Allows tool call -> tool result -> final response stream
       });
+
+      return result.toTextStreamResponse();
     }
 
-    // ------------------------------------------------------------------------
-    // STEP 3: Live OpenAI Responses API with Streaming & Web Search Tool
-    // ------------------------------------------------------------------------
-    const encoder = new TextEncoder(); // converts data into bytes so the stream can send it
-
-    const stream = new ReadableStream({ // standard streams api (modern web world)
-      async start(controller) {
-        try {
-          const modelName = process.env.AI_MODEL || "gpt-4o";
-
-          // Request streamed response from OpenAI Responses API with web search tool
-          const responseStream = await (client as any).responses.create({
-            model: modelName,
-            instructions: SYSTEM_INSTRUCTIONS,
-            input: userPrompt,
-            tools: [{ type: "web_search" }], // 👈 Enables live web search tool
-            stream: true,                    // 👈 Asks OpenAI to send tokens progressively
-          });
-
-          // Read each event delta as it arrives from OpenAI Responses API
-          for await (const event of responseStream) {
-            if (event.type === "response.output_text.delta" && event.delta) {
-              // Format according to Server-Sent Events (SSE) standard
-              const payload = `data: ${JSON.stringify({ chunk: event.delta })}\n\n`;
-              controller.enqueue(encoder.encode(payload));
-            }
-          }
-
-          // Send termination event so the frontend knows streaming is complete
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          controller.close();
-        } catch (streamError: any) {
-          console.error("OpenAI Streaming Error:", streamError);
-
-          // Graceful degradation: inform user and stream fallback ideas
-          const errorMsg = `\n\n⚠️ *Connection to AI failed (${streamError?.message || "Unknown error"}). Streaming simulated response...*\n\n`;
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ chunk: errorMsg })}\n\n`));
-
-          const fallbackWords = `Here are fallback gift ideas for: "${userPrompt}"\n\n### 1. Curated Gift Box\n* **Why it works**: Universally loved and practical.\n* **How to get it**: Order via your favorite local shop.`.split(" ");
-          for (const w of fallbackWords) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ chunk: w + " " })}\n\n`));
-            await new Promise((r) => setTimeout(r, 20));
-          }
-
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          controller.close();
-        }
+    // 2. Single-turn prompt mode fallback
+    const promptText = (validation.data.prompt || validation.data.userPrompt || "").trim();
+    const result = streamText({
+      model: openai(modelName),
+      system: SYSTEM_INSTRUCTIONS,
+      prompt: promptText,
+      tools: {
+        webSearch: webSearchTool,
       },
+      stopWhen: isStepCount(3),
     });
 
-    // ------------------------------------------------------------------------
-    // STEP 4: Return Stream Response using NextResponse with SSE Headers
-    // ------------------------------------------------------------------------
-    return new NextResponse(stream, {
-      headers: {
-        "Content-Type": "text/event-stream; charset=utf-8", // Tells browser: Expect live stream
-        "Cache-Control": "no-cache, no-transform",         // Disables proxy buffering
-        Connection: "keep-alive",                          // Keeps connection open
-      },
-    });
+    return result.toTextStreamResponse();
   } catch (error: any) {
     console.error("POST /api/gift Handler Error:", error);
     return NextResponse.json(

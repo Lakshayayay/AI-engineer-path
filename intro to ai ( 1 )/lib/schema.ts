@@ -12,18 +12,18 @@ import { z } from "zod";
 export const EnvSchema = z.object({
   AI_KEY: z.string().optional(),
   AI_URL: z.string().url().optional(),
-  AI_MODEL: z.string().default("gpt-4o-mini"),
+  AI_MODEL: z.string().default("gemini-2.5-flash"),
   PORT: z.string().default("3000"),
 });
 
 // 2. Validates the incoming Gift Request POST body
 // Ensures the user doesn't submit empty text or extremely large payloads (DoS protection)
 export const GiftRequestSchema = z.object({
-  userPrompt: z
-    .string()
-    .trim()
-    .min(3, "Please provide a more descriptive wish (at least 3 characters)")
-    .max(2000, "Prompt is too long (maximum 2000 characters)"),
+  messages: z.array(z.any()).optional(),
+  prompt: z.string().trim().min(3, "Please provide a more descriptive wish (at least 3 characters)").max(2000).optional(),
+  userPrompt: z.string().trim().min(3, "Please provide a more descriptive wish (at least 3 characters)").max(2000).optional(),
+}).refine((data) => (data.messages && data.messages.length > 0) || Boolean(data.prompt) || Boolean(data.userPrompt), {
+  message: "Please provide a more descriptive wish (at least 3 characters)",
 });
 
 // Automatically extract the TypeScript type from the Zod schema
