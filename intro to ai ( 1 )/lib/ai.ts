@@ -7,9 +7,17 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
  * Reads GOOGLE_GENERATIVE_AI_API_KEY from environment variables.
  * Get your free key at: https://aistudio.google.com/apikey
  */
-export const openai = createGoogleGenerativeAI({
+export const googleAI = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
 });
+
+// Startup validation — log warning if API key is missing
+if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+  console.warn(
+    "⚠️  GOOGLE_GENERATIVE_AI_API_KEY is not set. API requests will fail. " +
+    "Get your free key at: https://aistudio.google.com/apikey"
+  );
+}
 
 export const SYSTEM_INSTRUCTIONS = `
 You are Gift Genie — a world-class, emotionally intelligent gift advisor.

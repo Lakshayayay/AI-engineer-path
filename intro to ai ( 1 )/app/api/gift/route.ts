@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { streamText, convertToModelMessages, tool, isStepCount } from "ai";
 import { z } from "zod";
-import { openai, SYSTEM_INSTRUCTIONS } from "@/lib/openai";
+import { googleAI, SYSTEM_INSTRUCTIONS } from "@/lib/ai";
 import { GiftRequestSchema } from "@/lib/schema";
 
 export const runtime = "nodejs";
@@ -20,7 +20,8 @@ const webSearchTool = tool({
     try {
       // Query DuckDuckGo Instant Answer API for live web context
       const res = await fetch(
-        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`,
+        { signal: AbortSignal.timeout(5000) }
       );
       const data = await res.json();
 
@@ -57,14 +58,22 @@ export async function POST(req: NextRequest): Promise<Response> {
       return NextResponse.json({ message: errorMsg }, { status: 400 });
     }
 
+    // Guard: Ensure API key is configured
+    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      return NextResponse.json(
+        { message: "AI API key not configured. Set GOOGLE_GENERATIVE_AI_API_KEY in .env.local" },
+        { status: 503 }
+      );
+    }
+
     const modelName = process.env.AI_MODEL || "gemini-2.5-flash";
 
     // 1. Multi-turn conversation thread (when called via useChat)
     if (validation.data.messages && validation.data.messages.length > 0) {
-      const modelMessages = await convertToModelMessages(validation.data.messages);
+      const modelMessages = await convertToModelMessages(validation.data.messages as any);
 
       const result = streamText({
-        model: openai(modelName),
+        model: googleAI(modelName),
         system: SYSTEM_INSTRUCTIONS,
         messages: modelMessages,
         tools: {
@@ -79,7 +88,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     // 2. Single-turn prompt mode fallback
     const promptText = (validation.data.prompt || validation.data.userPrompt || "").trim();
     const result = streamText({
-      model: openai(modelName),
+      model: googleAI(modelName),
       system: SYSTEM_INSTRUCTIONS,
       prompt: promptText,
       tools: {
