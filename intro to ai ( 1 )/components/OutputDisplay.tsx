@@ -1,8 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import { getMessageText } from "@/lib/utils";
 
 export interface ChatMessage {
   id: string;
@@ -12,21 +13,10 @@ export interface ChatMessage {
 }
 
 interface OutputDisplayProps {
-  messages?: ChatMessage[];
-  content?: string;
+  messages: ChatMessage[];
   isStreaming: boolean;
-  isVisible: boolean;
-}
-
-function getMessageText(message: ChatMessage): string {
-  if (typeof message.content === "string") return message.content;
-  if (Array.isArray(message.parts)) {
-    return message.parts
-      .filter((p) => p.type === "text" && typeof p.text === "string")
-      .map((p) => p.text || "")
-      .join("");
-  }
-  return "";
+  userInitial: string;
+  userAvatarUrl?: string;
 }
 
 function renderMarkdown(rawText: string): string {
@@ -43,70 +33,120 @@ function renderMarkdown(rawText: string): string {
   }
 }
 
+const SCROLL_BOTTOM_THRESHOLD = 120;
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error("Copy failed:", err);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className="bubble-copy-btn"
+      onClick={handleCopy}
+      aria-label="Copy response"
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
 /**
- * ==============================================================================
- * OUTPUT DISPLAY & CONVERSATION THREAD RENDERER
- * ==============================================================================
- * Supports multi-turn dialogue with memory:
- * - Renders user wishes as question bubbles.
- * - Renders Genie recommendations in formatted Markdown cards.
- * - Shows an active blinking cursor (▊) on the streaming message.
+ * Conversation Thread Renderer
+ * Shows user messages with avatars, assistant messages with genie icon,
+ * and a typing indicator while waiting for the first tokens.
  */
 export const OutputDisplay: React.FC<OutputDisplayProps> = ({
   messages,
-  content,
   isStreaming,
-  isVisible,
+  userInitial,
+  userAvatarUrl,
 }) => {
-  // Multi-turn conversation rendering (from useChat)
-  if (messages && messages.length > 0) {
-    return (
-      <section className="output-section">
-        <div className={`output-container visible ${isStreaming ? "streaming-active" : ""}`}>
-          <div className="conversation-thread">
-            {messages.map((msg, idx) => {
-              const text = getMessageText(msg);
-              const isLastAssistant =
-                msg.role === "assistant" && idx === messages.length - 1 && isStreaming;
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-              if (msg.role === "user") {
-                return (
-                  <div key={msg.id || idx} className="chat-user-message">
-                    <span className="chat-user-label">🧞‍♂️ Your Wish</span>
-                    <p className="chat-user-text">{text}</p>
-                  </div>
-                );
-              }
+  // Auto-scroll to bottom on new content, but never fight the user once
+  // they've scrolled up to read earlier messages.
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom < SCROLL_BOTTOM_THRESHOLD) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isStreaming]);
 
-              return (
-                <div key={msg.id || idx} className="chat-assistant-message">
-                  <div
-                    className={`output-content ${isLastAssistant ? "active-stream" : ""}`}
-                    dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  // Fallback single-turn rendering
-  if (!isVisible && !content) return null;
+  if (messages.length === 0) return null;
 
   return (
-    <section className="output-section">
-      <div
-        className={`output-container ${isVisible ? "visible" : ""} ${
-          isStreaming ? "streaming-active" : ""
-        }`}
-      >
-        <div
-          className="output-content"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(content || "") }}
-        />
+    <section className="conversation-section" ref={scrollContainerRef}>
+      <div className="conversation-thread" aria-live="polite">
+        {messages.map((msg, idx) => {
+          const text = getMessageText(msg);
+          const isLastAssistant =
+            msg.role === "assistant" && idx === messages.length - 1 && isStreaming;
+
+          if (msg.role === "user") {
+            return (
+              <div key={msg.id || idx} className="chat-bubble chat-bubble-user">
+                <div className="bubble-content">
+                  <p className="bubble-text">{text}</p>
+                </div>
+                <div className="bubble-avatar user-bubble-avatar">
+                  {userAvatarUrl ? (
+                    <img src={userAvatarUrl} alt="You" />
+                  ) : (
+                    <span>{userInitial}</span>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          // Assistant message — show typing indicator if empty and streaming
+          if (isLastAssistant && !text.trim()) {
+            return (
+              <div key={msg.id || idx} className="chat-bubble chat-bubble-assistant">
+                <div className="bubble-avatar assistant-bubble-avatar">
+                  <img src="/assets/genie.svg" alt="Genie" />
+                </div>
+                <div className="bubble-content">
+                  <div className="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={msg.id || idx} className="chat-bubble chat-bubble-assistant">
+              <div className="bubble-avatar assistant-bubble-avatar">
+                <img src="/assets/genie.svg" alt="Genie" />
+              </div>
+              <div className="bubble-content">
+                <div
+                  className={`bubble-markdown ${isLastAssistant ? "active-stream" : ""}`}
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
+                />
+                {!isLastAssistant && text.trim() && <CopyButton text={text} />}
+              </div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
       </div>
     </section>
   );

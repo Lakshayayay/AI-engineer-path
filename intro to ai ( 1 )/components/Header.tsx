@@ -4,14 +4,17 @@ import React from "react";
 
 interface HeaderProps {
   onToggleSidebar: () => void;
-  isSupabase: boolean;
+  user: { displayName: string; avatarUrl?: string } | null;
+  onOpenAuth: () => void;
 }
 
 /**
  * App Header Component
- * Displays branding, mobile navigation toggle, and current environment status badge.
+ * Displays branding, mobile menu toggle, and user avatar / sign-in CTA.
  */
-export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSupabase }) => {
+export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, user, onOpenAuth }) => {
+  const userInitial = (user?.displayName || "U").charAt(0).toUpperCase();
+
   return (
     <header className="app-header">
       <div className="header-left">
@@ -33,9 +36,25 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSupabase }) =
         </div>
       </div>
       <div className="header-right">
-        <span className="active-mode-indicator">
-          {isSupabase ? "Supabase Mode" : "Local Mode"}
-        </span>
+        {user ? (
+          <button
+            className="header-avatar"
+            title={user.displayName}
+            type="button"
+            onClick={onToggleSidebar}
+            aria-label={`${user.displayName} — open menu`}
+          >
+            {user.avatarUrl ? (
+              <img src={user.avatarUrl} alt={user.displayName} className="header-avatar-img" />
+            ) : (
+              <span>{userInitial}</span>
+            )}
+          </button>
+        ) : (
+          <button className="header-signin-btn" onClick={onOpenAuth} type="button">
+            Sign In
+          </button>
+        )}
       </div>
     </header>
   );

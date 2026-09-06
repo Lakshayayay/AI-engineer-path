@@ -8,25 +8,33 @@ import { Sidebar } from "@/components/Sidebar";
 import { GiftForm } from "@/components/GiftForm";
 import { OutputDisplay } from "@/components/OutputDisplay";
 import { AuthModal } from "@/components/AuthModal";
-import { initAuth, signOut, isSupabaseEnabled } from "@/lib/auth";
+import { initAuth, signOut } from "@/lib/auth";
 import { saveConversation, getConversationHistory } from "@/lib/db";
+import { getMessageText, groupHistoryBySession } from "@/lib/utils";
 import { AppUser, HistoryItem } from "@/lib/types";
 
 export default function Home() {
   // --------------------------------------------------------------------------
-  // STATE MANAGEMENT
+  // STATE
   // --------------------------------------------------------------------------
   const [user, setUser] = useState<AppUser | null>(null);
-  const [isSupabase, setIsSupabase] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [prompt, setPrompt] = useState<string>("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const userRef = useRef<AppUser | null>(null);
   userRef.current = user;
 
-  // Memoized function to fetch saved wishes from DB/localStorage for a given user
+  const lastPromptRef = useRef<string>("");
+  const sessionIdRef = useRef<string>(
+    typeof crypto !== "undefined" ? crypto.randomUUID() : `session-${Date.now()}`
+  );
+
+  // --------------------------------------------------------------------------
+  // HISTORY
+  // --------------------------------------------------------------------------
   const refreshHistory = useCallback(async (userId: string) => {
     try {
       const items = await getConversationHistory(userId);
@@ -36,17 +44,10 @@ export default function Home() {
     }
   }, []);
 
-  // Effect that runs once when the page first loads
   useEffect(() => {
-    setIsSupabase(isSupabaseEnabled());
-
     initAuth((activeUser) => {
       setUser(activeUser);
-      if (activeUser) {
-        refreshHistory(activeUser.uid);
-      } else {
-        setHistory([]);
-      }
+      refreshHistory(activeUser ? activeUser.uid : "guest");
     });
   }, [refreshHistory]);
 
@@ -57,33 +58,26 @@ export default function Home() {
   };
 
   // --------------------------------------------------------------------------
-  // VERCEL AI SDK useChat (Multi-turn conversational memory)
+  // CHAT (Vercel AI SDK)
   // --------------------------------------------------------------------------
   const transportRef = useRef(new TextStreamChatTransport({ api: "/api/gift" }));
-
-  // Helper to read text cleanly from an AI message
-  const getMessageContent = (msg: any): string => {
-    if (typeof msg.content === "string") return msg.content;
-    if (Array.isArray(msg.parts)) {
-      return msg.parts.map((p: any) => p.text || "").join("");
-    }
-    return "";
-  };
 
   const {
     messages,
     setMessages,
     sendMessage,
     status,
+    stop,
   } = useChat({
     transport: transportRef.current,
     onFinish: async ({ message }) => {
       const activeUser = userRef.current;
       const targetUserId = activeUser ? activeUser.uid : "guest";
-      const assistantText = getMessageContent(message);
+      const assistantText = getMessageText(message);
+      const promptToSave = lastPromptRef.current || "Gift Genie Wish";
 
       try {
-        await saveConversation(targetUserId, prompt || "Gift Genie Wish", assistantText);
+        await saveConversation(targetUserId, sessionIdRef.current, promptToSave, assistantText);
         refreshHistory(targetUserId);
       } catch (saveErr) {
         console.error("Failed to auto-save wish:", saveErr);
@@ -91,82 +85,121 @@ export default function Home() {
     },
     onError: (err) => {
       console.error("Chat error:", err);
-      alert(err?.message || "Failed to summon gift ideas. Please try again.");
+      setChatError(err?.message || "Something went wrong. Please try again.");
     },
   });
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  // Clicking an item from history loads it into the conversation view
-  const handleSelectHistory = (item: HistoryItem) => {
-    setMessages([
-      {
-        id: `user-${Date.now()}`,
-        role: "user",
-        parts: [{ type: "text", text: item.prompt }],
-      } as any,
-      {
-        id: `asst-${Date.now()}`,
-        role: "assistant",
-        parts: [{ type: "text", text: item.responseText }],
-      } as any,
-    ]);
+  // --------------------------------------------------------------------------
+  // HANDLERS
+  // --------------------------------------------------------------------------
+  const handleNewChat = () => {
+    sessionIdRef.current = typeof crypto !== "undefined" ? crypto.randomUUID() : `session-${Date.now()}`;
+    setMessages([]);
     setPrompt("");
-    window.scrollTo({ top: 300, behavior: "smooth" });
+    setChatError(null);
   };
 
-  // Submitting sends a message into the continuous conversation
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanPrompt = prompt.trim();
+  const handleSelectHistory = (sessionId: string) => {
+    const turns = history
+      .filter((item) => item.sessionId === sessionId)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    setMessages(
+      turns.flatMap((turn, idx) => [
+        {
+          id: `user-${sessionId}-${idx}`,
+          role: "user",
+          parts: [{ type: "text", text: turn.prompt }],
+        },
+        {
+          id: `asst-${sessionId}-${idx}`,
+          role: "assistant",
+          parts: [{ type: "text", text: turn.responseText }],
+        },
+      ]) as any
+    );
+    sessionIdRef.current = sessionId;
+    setPrompt("");
+    setChatError(null);
+  };
+
+  const submitPrompt = async (text: string) => {
+    const cleanPrompt = text.trim();
     if (!cleanPrompt || isLoading) return;
 
-    setPrompt(""); // Clear input box ready for next follow-up
+    setChatError(null);
+    lastPromptRef.current = cleanPrompt;
+    setPrompt("");
     await sendMessage({ text: cleanPrompt });
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitPrompt(prompt);
+  };
+
+  const handleRetry = () => {
+    if (lastPromptRef.current) submitPrompt(lastPromptRef.current);
+  };
+
+  // Derived values for display
+  const userInitial = (user?.displayName || user?.email || "Y").charAt(0).toUpperCase();
+  const sessions = groupHistoryBySession(history);
+
   return (
     <div className="dashboard-layout">
-      {/* Sidebar for Navigation, User Profile, and Saved History */}
+      {/* Sidebar */}
       <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         user={user}
-        isSupabase={isSupabase}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onLogout={handleLogout}
-        history={history}
+        onNewChat={handleNewChat}
+        sessions={sessions}
         onSelectHistory={handleSelectHistory}
       />
 
-      {/* Main App Container */}
+      {/* Main App */}
       <div className="app-container">
-        {/* Top Header with title and mobile menu toggle */}
         <Header
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-          isSupabase={isSupabase}
+          user={user}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
         />
 
         <main className="main-content">
-          {/* Multi-turn Conversation Display */}
+          {/* Conversation Thread */}
           <OutputDisplay
             messages={messages as any}
             isStreaming={isLoading}
-            isVisible={messages.length > 0}
+            userInitial={userInitial}
+            userAvatarUrl={user?.avatarUrl}
           />
 
-          {/* User Input Textarea and Magic Lamp CTA Button */}
+          {chatError && (
+            <div className="chat-error-banner" role="alert">
+              <span>{chatError}</span>
+              <button type="button" onClick={handleRetry}>Retry</button>
+            </div>
+          )}
+
+          {/* Chat Input */}
           <GiftForm
             prompt={prompt}
             onChangePrompt={setPrompt}
             onSubmit={handleSubmit}
+            onSubmitText={submitPrompt}
             isLoading={isLoading}
-            hasResult={messages.length > 0}
+            onStop={stop}
+            hasMessages={messages.length > 0}
           />
         </main>
       </div>
 
-      {/* Authentication Modal Dialog (Sign In / Register / Google OAuth) */}
+      {/* Auth Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}

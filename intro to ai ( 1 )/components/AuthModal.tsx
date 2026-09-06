@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { signIn, signUp, signInWithGoogle } from "@/lib/auth";
-import { SignInSchema, SignUpSchema } from "@/lib/schema";
+import { signInWithGoogle } from "@/lib/auth";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -10,68 +9,14 @@ interface AuthModalProps {
 }
 
 /**
- * Authentication Modal Dialog Component
- * Handles user login, registration, and Google OAuth with glassmorphism design and tab switching.
+ * Authentication Modal — Google Sign-In Only
+ * Clean, single-action modal with glassmorphism design.
  */
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const [tab, setTab] = useState<"login" | "signup">("login");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
-
-  const handleTabSwitch = (newTab: "login" | "signup") => {
-    setTab(newTab);
-    setErrorMsg(null);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-
-    // Client-side Zod validation
-    if (tab === "login") {
-      const validation = SignInSchema.safeParse({ email, password });
-      if (!validation.success) {
-        setErrorMsg(validation.error.issues[0]?.message || "Invalid input");
-        return;
-      }
-    } else {
-      const validation = SignUpSchema.safeParse({ email, password, displayName: name });
-      if (!validation.success) {
-        setErrorMsg(validation.error.issues[0]?.message || "Invalid input");
-        return;
-      }
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      let result;
-      if (tab === "login") {
-        result = await signIn(email, password);
-      } else {
-        result = await signUp(email, password, name);
-      }
-
-      if (result.success) {
-        onClose();
-        // Reset form
-        setName("");
-        setEmail("");
-        setPassword("");
-      } else {
-        setErrorMsg(result.error || "Authentication failed.");
-      }
-    } catch (err: any) {
-      setErrorMsg(err?.message || "An unexpected error occurred.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleGoogleAuth = async () => {
     setErrorMsg(null);
@@ -105,90 +50,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           &times;
         </button>
 
-        {/* Tab Switcher */}
-        <div className="auth-tabs">
-          <button
-            type="button"
-            className={`tab-btn ${tab === "login" ? "active" : ""}`}
-            onClick={() => handleTabSwitch("login")}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            className={`tab-btn ${tab === "signup" ? "active" : ""}`}
-            onClick={() => handleTabSwitch("signup")}
-          >
-            Register
-          </button>
+        {/* Header */}
+        <div className="auth-modal-header">
+          <img src="/assets/genie.svg" alt="Gift Genie" className="auth-genie-icon" />
+          <h2 className="auth-title">Welcome to Gift Genie</h2>
+          <p className="auth-subtitle">
+            Sign in to save your wishes and sync across devices.
+          </p>
         </div>
 
-        {/* Form Inputs */}
-        <form className="auth-form" onSubmit={handleSubmit}>
-          {tab === "signup" && (
-            <div className="form-group">
-              <label htmlFor="auth-name">Name</label>
-              <input
-                type="text"
-                id="auth-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="John Doe"
-                required
-              />
-            </div>
-          )}
+        {errorMsg && <div className="auth-error">{errorMsg}</div>}
 
-          <div className="form-group">
-            <label htmlFor="auth-email">Email Address</label>
-            <input
-              type="email"
-              id="auth-email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="auth-password">Password</label>
-            <input
-              type="password"
-              id="auth-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </div>
-
-          {errorMsg && <div className="auth-error">{errorMsg}</div>}
-
-          <button
-            type="submit"
-            className="submit-btn"
-            disabled={isSubmitting}
-          >
-            {isSubmitting
-              ? "Processing..."
-              : tab === "login"
-              ? "Sign In"
-              : "Register"}
-          </button>
-        </form>
-
-        <div className="auth-divider">
-          <span>or continue with</span>
-        </div>
-
+        {/* Google Sign-In Button */}
         <button
           type="button"
           className="google-btn"
           onClick={handleGoogleAuth}
           disabled={isSubmitting}
         >
-          <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
             <path
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
               fill="#4285F4"
@@ -206,8 +86,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               fill="#EA4335"
             />
           </svg>
-          Google Account
+          {isSubmitting ? "Connecting..." : "Continue with Google"}
         </button>
+
+        <p className="auth-footer-text">
+          Your data is secured with Supabase and Google OAuth 2.0
+        </p>
       </div>
     </div>
   );
