@@ -8,18 +8,20 @@ import { z } from "zod";
  * and automatically infers static TypeScript types.
  */
 
-// 1. Validates Server Environment Variables
-export const EnvSchema = z.object({
-  AI_KEY: z.string().optional(),
-  AI_URL: z.string().url().optional(),
-  AI_MODEL: z.string().default("gemini-2.5-flash"),
-  PORT: z.string().default("3000"),
+// A useChat UIMessage. `parts` content varies (text, tool-call, tool-result),
+// so part shape stays loose — the envelope (role/id/array bounds) is what
+// keeps an arbitrary payload from reaching convertToModelMessages.
+const ChatMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(["user", "assistant", "system"]),
+  parts: z.array(z.record(z.string(), z.unknown())),
 });
 
-// 2. Validates the incoming Gift Request POST body
-// Ensures the user doesn't submit empty text or extremely large payloads (DoS protection)
+// Validates the incoming Gift Request POST body
+// Ensures the user doesn't submit empty text, oversized payloads, or malformed
+// message envelopes (DoS / abuse protection)
 export const GiftRequestSchema = z.object({
-  messages: z.array(z.any()).optional(),
+  messages: z.array(ChatMessageSchema).max(50, "Conversation is too long").optional(),
   prompt: z.string().trim().min(3, "Please provide a more descriptive wish (at least 3 characters)").max(2000).optional(),
   userPrompt: z.string().trim().min(3, "Please provide a more descriptive wish (at least 3 characters)").max(2000).optional(),
 }).refine((data) => (data.messages && data.messages.length > 0) || Boolean(data.prompt) || Boolean(data.userPrompt), {
@@ -28,15 +30,3 @@ export const GiftRequestSchema = z.object({
 
 // Automatically extract the TypeScript type from the Zod schema
 export type GiftRequestInput = z.infer<typeof GiftRequestSchema>;
-
-// 3. User Authentication Validation Schemas
-export const SignInSchema = z.object({
-  email: z.string().trim().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
-export const SignUpSchema = z.object({
-  email: z.string().trim().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  displayName: z.string().trim().min(2, "Name must be at least 2 characters").optional(),
-});

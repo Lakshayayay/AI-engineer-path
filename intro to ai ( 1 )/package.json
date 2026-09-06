@@ -9,28 +9,21 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.64",
-    "@ai-sdk/openai": "^4.0.60",
     "@ai-sdk/react": "^4.0.96",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
     "ai": "^7.0.93",
     "dompurify": "^3.4.14",
-    "dotenv": "^17.4.2",
-    "express": "^4.18.2",
     "marked": "^18.0.11",
     "next": "^16.3.3",
-    "openai": "^7.8.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/dompurify": "^3.2.0",
     "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
-    "concurrently": "^8.2.2",
-    "typescript": "^7.0.2",
-    "vite": "^7.3.0"
+    "typescript": "^7.0.2"
   }
 }
