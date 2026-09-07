@@ -66,7 +66,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       );
     }
 
-    const modelName = process.env.AI_MODEL || "gemini-2.5-flash";
+    const modelName = process.env.AI_MODEL || "gemini-3.6-flash";
 
     // 1. Multi-turn conversation thread (when called via useChat)
     if (validation.data.messages && validation.data.messages.length > 0) {
