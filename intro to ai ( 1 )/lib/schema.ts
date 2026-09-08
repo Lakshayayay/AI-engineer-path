@@ -20,10 +20,20 @@ const ChatMessageSchema = z.object({
 // Validates the incoming Gift Request POST body
 // Ensures the user doesn't submit empty text, oversized payloads, or malformed
 // message envelopes (DoS / abuse protection)
+// Client-supplied location hint (from IP geolocation or manual entry). Bounded
+// since it's interpolated into the system prompt sent to the model.
+const LocationSchema = z.object({
+  city: z.string().trim().max(80).optional(),
+  region: z.string().trim().max(80).optional(),
+  country: z.string().trim().max(80).optional(),
+  countryCode: z.string().trim().max(4).optional(),
+});
+
 export const GiftRequestSchema = z.object({
   messages: z.array(ChatMessageSchema).max(50, "Conversation is too long").optional(),
   prompt: z.string().trim().min(3, "Please provide a more descriptive wish (at least 3 characters)").max(2000).optional(),
   userPrompt: z.string().trim().min(3, "Please provide a more descriptive wish (at least 3 characters)").max(2000).optional(),
+  location: LocationSchema.optional(),
 }).refine((data) => (data.messages && data.messages.length > 0) || Boolean(data.prompt) || Boolean(data.userPrompt), {
   message: "Please provide a more descriptive wish (at least 3 characters)",
 });

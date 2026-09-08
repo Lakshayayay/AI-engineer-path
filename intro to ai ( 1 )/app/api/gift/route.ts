@@ -1,51 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { streamText, convertToModelMessages, tool, isStepCount } from "ai";
-import { z } from "zod";
-import { googleAI, SYSTEM_INSTRUCTIONS } from "@/lib/ai";
+import { streamText, convertToModelMessages, isStepCount } from "ai";
+import { googleAI, buildSystemInstructions } from "@/lib/ai";
 import { GiftRequestSchema } from "@/lib/schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Web Search Tool (Vercel AI SDK)
- * Allows the LLM to search for live product info, real-time prices, and local stores.
+ * Turns a Gemini/AI-SDK stream failure into a message the chat UI can show.
+ * The Vercel AI SDK starts the HTTP response before the model has replied,
+ * so this is the only place a mid-stream error reaches the browser.
  */
-const webSearchTool = tool({
-  description: "Search the web for up-to-date gift ideas, current pricing, store locations, and reviews.",
-  inputSchema: z.object({
-    query: z.string().describe("The search query to look up on the web"),
-  }),
-  execute: async ({ query }: { query: string }) => {
-    try {
-      // Query DuckDuckGo Instant Answer API for live web context
-      const res = await fetch(
-        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`,
-        { signal: AbortSignal.timeout(5000) }
-      );
-      const data = await res.json();
+function streamErrorMessage(error: unknown): string {
+  console.error("Gemini stream failed:", error);
+  const msg = error instanceof Error ? error.message : String(error);
 
-      const snippets: string[] = [];
-      if (data.AbstractText) snippets.push(data.AbstractText);
-      if (Array.isArray(data.RelatedTopics)) {
-        for (const topic of data.RelatedTopics.slice(0, 3)) {
-          if (topic.Text) snippets.push(topic.Text);
-        }
-      }
-
-      if (snippets.length > 0) {
-        return { query, results: snippets };
-      }
-      return { query, note: "Searched catalog and web for: " + query };
-    } catch {
-      return { query, note: "Search completed for: " + query };
-    }
-  },
-});
+  if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
+    return "Daily free limit reached for this model. Try again later, or set AI_MODEL to a lighter model in .env.local.";
+  }
+  return "The genie hit a snag. Please try again.";
+}
 
 /**
  * ==============================================================================
- * POST /api/gift (Next.js Route Handler with useChat + Web Search Tool)
+ * POST /api/gift (Next.js Route Handler with useChat + Gemini Search Grounding)
  * ==============================================================================
  */
 export async function POST(req: NextRequest): Promise<Response> {
@@ -67,6 +45,11 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const modelName = process.env.AI_MODEL || "gemini-3.6-flash";
+    const system = buildSystemInstructions(validation.data.location);
+
+    // Google's grounding search runs inside Google's own call — it isn't a
+    // separate client-side tool round trip like the old DuckDuckGo tool was.
+    const tools = { google_search: googleAI.tools.googleSearch({}) };
 
     // 1. Multi-turn conversation thread (when called via useChat)
     if (validation.data.messages && validation.data.messages.length > 0) {
@@ -74,30 +57,32 @@ export async function POST(req: NextRequest): Promise<Response> {
 
       const result = streamText({
         model: googleAI(modelName),
-        system: SYSTEM_INSTRUCTIONS,
+        system,
         messages: modelMessages,
-        tools: {
-          webSearch: webSearchTool,
-        },
-        stopWhen: isStepCount(3), // Allows tool call -> tool result -> final response stream
+        tools,
+        stopWhen: isStepCount(2),
       });
 
-      return result.toTextStreamResponse();
+      return result.toUIMessageStreamResponse({
+        sendSources: true, // required for citation chips — defaults to false
+        onError: streamErrorMessage,
+      });
     }
 
     // 2. Single-turn prompt mode fallback
     const promptText = (validation.data.prompt || validation.data.userPrompt || "").trim();
     const result = streamText({
       model: googleAI(modelName),
-      system: SYSTEM_INSTRUCTIONS,
+      system,
       prompt: promptText,
-      tools: {
-        webSearch: webSearchTool,
-      },
-      stopWhen: isStepCount(3),
+      tools,
+      stopWhen: isStepCount(2),
     });
 
-    return result.toTextStreamResponse();
+    return result.toUIMessageStreamResponse({
+      sendSources: true,
+      onError: streamErrorMessage,
+    });
   } catch (error: any) {
     console.error("POST /api/gift Handler Error:", error);
     return NextResponse.json(
