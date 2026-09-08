@@ -4,12 +4,33 @@
 
 import { HistoryItem, HistorySession } from "./types";
 
-export function autoResizeTextarea(textarea: HTMLTextAreaElement | null) {
+export type MessageSource = {
+  url: string;
+  title?: string;
+};
+
+interface MessageWithContent {
+  content?: string;
+  parts?: Array<{ type: string; text?: string }>;
+}
+
+interface MessageWithSources {
+  parts?: Array<{ type: string; url?: string; title?: string }>;
+}
+
+/**
+ * Automatically adjusts the height of a textarea based on its scroll content.
+ */
+export function autoResizeTextarea(textarea: HTMLTextAreaElement | null): void {
   if (!textarea) return;
+
   textarea.style.height = "auto";
   textarea.style.height = `${textarea.scrollHeight}px`;
 }
 
+/**
+ * Formats a UNIX timestamp into a readable date and time string (e.g., "Sep 8, 09:30 PM").
+ */
 export function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString(undefined, {
     month: "short",
@@ -19,57 +40,89 @@ export function formatDate(timestamp: number): string {
   });
 }
 
-// Extract plain text from a useChat message, whichever shape it arrives in
-// (legacy `content` string, or the current `parts` array).
-export function getMessageText(message: {
-  content?: string;
-  parts?: Array<{ type: string; text?: string }>;
-}): string {
-  if (typeof message.content === "string") return message.content;
+/**
+ * Extracts plain text from a chat message.
+ * Handles both legacy string content and modern stream message parts.
+ */
+export function getMessageText(message: MessageWithContent): string {
+  if (typeof message.content === "string") {
+    return message.content;
+  }
+
   if (Array.isArray(message.parts)) {
     return message.parts
-      .filter((p) => p.type === "text" && typeof p.text === "string")
-      .map((p) => p.text || "")
+      .filter((part) => part.type === "text" && typeof part.text === "string")
+      .map((part) => part.text || "")
       .join("");
   }
+
   return "";
 }
 
-export type MessageSource = { url: string; title?: string };
-
-// Pull deduped source-url parts off a message (populated when the server sets
-// sendSources: true on the stream). Mirrors getMessageText's tolerance for
-// messages arriving in different shapes.
-export function getMessageSources(message: {
-  parts?: Array<{ type: string; url?: string; title?: string }>;
-}): MessageSource[] {
-  if (!Array.isArray(message.parts)) return [];
-  const seen = new Set<string>();
-  const out: MessageSource[] = [];
-  for (const p of message.parts) {
-    if (p.type !== "source-url" || !p.url || seen.has(p.url)) continue;
-    seen.add(p.url);
-    out.push({ url: p.url, title: p.title });
+/**
+ * Extracts up to 4 unique citation source URLs from a message's stream parts.
+ */
+export function getMessageSources(message: MessageWithSources): MessageSource[] {
+  if (!Array.isArray(message.parts)) {
+    return [];
   }
-  return out.slice(0, 4); // keep the row subtle
+
+  const seenUrls = new Set<string>();
+  const sources: MessageSource[] = [];
+
+  for (const part of message.parts) {
+    const isSourceUrl = part.type === "source-url" && Boolean(part.url);
+
+    if (isSourceUrl && part.url && !seenUrls.has(part.url)) {
+      seenUrls.add(part.url);
+      sources.push({ url: part.url, title: part.title });
+    }
+
+    if (sources.length >= 4) {
+      break;
+    }
+  }
+
+  return sources;
 }
 
-// Collapse flat per-turn history rows into one row per conversation for the
-// sidebar, newest first.
+/**
+ * Groups per-turn chat history items into conversation sessions for the sidebar,
+ * ordered from newest to oldest.
+ */
 export function groupHistoryBySession(history: HistoryItem[]): HistorySession[] {
-  const bySession = new Map<string, HistoryItem[]>();
+  // 1. Group history items by sessionId
+  const sessionGroups = new Map<string, HistoryItem[]>();
+
   for (const item of history) {
-    const bucket = bySession.get(item.sessionId);
-    if (bucket) bucket.push(item);
-    else bySession.set(item.sessionId, [item]);
+    const existingGroup = sessionGroups.get(item.sessionId);
+
+    if (existingGroup) {
+      existingGroup.push(item);
+    } else {
+      sessionGroups.set(item.sessionId, [item]);
+    }
   }
 
+  // 2. Build session summaries: initial prompt as title, newest activity as timestamp
   const sessions: HistorySession[] = [];
-  for (const [sessionId, items] of bySession) {
-    const oldest = items.reduce((a, b) => (a.timestamp < b.timestamp ? a : b));
-    const newest = items.reduce((a, b) => (a.timestamp > b.timestamp ? a : b));
-    sessions.push({ sessionId, title: oldest.prompt, lastTimestamp: newest.timestamp });
+
+  for (const [sessionId, items] of sessionGroups) {
+    const oldestItem = items.reduce((earliest, current) =>
+      current.timestamp < earliest.timestamp ? current : earliest
+    );
+    const newestItem = items.reduce((latest, current) =>
+      current.timestamp > latest.timestamp ? current : latest
+    );
+
+    sessions.push({
+      sessionId,
+      title: oldestItem.prompt,
+      lastTimestamp: newestItem.timestamp,
+    });
   }
 
+  // 3. Sort sessions with most recently active first
   return sessions.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
 }
+
