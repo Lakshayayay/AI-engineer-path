@@ -2,16 +2,18 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
-import { TextStreamChatTransport } from "ai";
+import { DefaultChatTransport } from "ai";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { GiftForm } from "@/components/GiftForm";
 import { OutputDisplay } from "@/components/OutputDisplay";
 import { AuthModal } from "@/components/AuthModal";
+import { LocationModal } from "@/components/LocationModal";
 import { initAuth, signOut } from "@/lib/auth";
 import { saveConversation, getConversationHistory } from "@/lib/db";
 import { getMessageText, groupHistoryBySession } from "@/lib/utils";
 import { AppUser, HistoryItem } from "@/lib/types";
+import { UserLocation, getStoredLocation, setStoredLocation, detectLocation } from "@/lib/location";
 
 export default function Home() {
   // --------------------------------------------------------------------------
@@ -19,13 +21,18 @@ export default function Home() {
   // --------------------------------------------------------------------------
   const [user, setUser] = useState<AppUser | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [prompt, setPrompt] = useState<string>("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [location, setLocation] = useState<UserLocation | null>(null);
 
   const userRef = useRef<AppUser | null>(null);
   userRef.current = user;
+
+  const locationRef = useRef<UserLocation | null>(null);
+  locationRef.current = location;
 
   const lastPromptRef = useRef<string>("");
   const sessionIdRef = useRef<string>(
@@ -51,6 +58,30 @@ export default function Home() {
     });
   }, [refreshHistory]);
 
+  // --------------------------------------------------------------------------
+  // LOCATION
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    const stored = getStoredLocation();
+    if (stored) {
+      setLocation(stored);
+      return;
+    }
+    // No stored preference yet — detect once via IP, silently. A failed
+    // detection just leaves location unset; the model asks for it in chat.
+    detectLocation().then((detected) => {
+      if (detected) {
+        setLocation(detected);
+        setStoredLocation(detected);
+      }
+    });
+  }, []);
+
+  const handleSaveLocation = (loc: UserLocation | null) => {
+    setLocation(loc);
+    setStoredLocation(loc);
+  };
+
   const handleLogout = async () => {
     await signOut();
     setUser(null);
@@ -60,7 +91,7 @@ export default function Home() {
   // --------------------------------------------------------------------------
   // CHAT (Vercel AI SDK)
   // --------------------------------------------------------------------------
-  const transportRef = useRef(new TextStreamChatTransport({ api: "/api/gift" }));
+  const transportRef = useRef(new DefaultChatTransport({ api: "/api/gift" }));
 
   const {
     messages,
@@ -132,7 +163,7 @@ export default function Home() {
     setChatError(null);
     lastPromptRef.current = cleanPrompt;
     setPrompt("");
-    await sendMessage({ text: cleanPrompt });
+    await sendMessage({ text: cleanPrompt }, { body: { location: locationRef.current } });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -168,6 +199,8 @@ export default function Home() {
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
           user={user}
           onOpenAuth={() => setIsAuthModalOpen(true)}
+          locationLabel={location?.city}
+          onOpenLocation={() => setIsLocationModalOpen(true)}
         />
 
         <main className="main-content">
@@ -203,6 +236,14 @@ export default function Home() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+      />
+
+      {/* Location Modal */}
+      <LocationModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        location={location}
+        onSave={handleSaveLocation}
       />
     </div>
   );

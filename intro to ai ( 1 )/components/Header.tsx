@@ -6,13 +6,21 @@ interface HeaderProps {
   onToggleSidebar: () => void;
   user: { displayName: string; avatarUrl?: string } | null;
   onOpenAuth: () => void;
+  locationLabel?: string;
+  onOpenLocation: () => void;
 }
 
 /**
  * App Header Component
- * Displays branding, mobile menu toggle, and user avatar / sign-in CTA.
+ * Displays branding, mobile menu toggle, location pill, and user avatar / sign-in CTA.
  */
-export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, user, onOpenAuth }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onToggleSidebar,
+  user,
+  onOpenAuth,
+  locationLabel,
+  onOpenLocation,
+}) => {
   const userInitial = (user?.displayName || "U").charAt(0).toUpperCase();
 
   return (
@@ -36,6 +44,14 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar, user, onOpenAut
         </div>
       </div>
       <div className="header-right">
+        <button
+          className="location-pill"
+          onClick={onOpenLocation}
+          type="button"
+          aria-label="Set your location"
+        >
+          📍 {locationLabel || "Set location"}
+        </button>
         {user ? (
           <button
             className="header-avatar"
