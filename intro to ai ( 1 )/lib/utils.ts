@@ -35,6 +35,25 @@ export function getMessageText(message: {
   return "";
 }
 
+export type MessageSource = { url: string; title?: string };
+
+// Pull deduped source-url parts off a message (populated when the server sets
+// sendSources: true on the stream). Mirrors getMessageText's tolerance for
+// messages arriving in different shapes.
+export function getMessageSources(message: {
+  parts?: Array<{ type: string; url?: string; title?: string }>;
+}): MessageSource[] {
+  if (!Array.isArray(message.parts)) return [];
+  const seen = new Set<string>();
+  const out: MessageSource[] = [];
+  for (const p of message.parts) {
+    if (p.type !== "source-url" || !p.url || seen.has(p.url)) continue;
+    seen.add(p.url);
+    out.push({ url: p.url, title: p.title });
+  }
+  return out.slice(0, 4); // keep the row subtle
+}
+
 // Collapse flat per-turn history rows into one row per conversation for the
 // sidebar, newest first.
 export function groupHistoryBySession(history: HistoryItem[]): HistorySession[] {

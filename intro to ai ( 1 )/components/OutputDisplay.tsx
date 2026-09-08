@@ -3,13 +3,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { getMessageText } from "@/lib/utils";
+import { getMessageText, getMessageSources } from "@/lib/utils";
 
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
   content?: string;
-  parts?: Array<{ type: string; text?: string }>;
+  parts?: Array<{ type: string; text?: string; url?: string; title?: string }>;
 }
 
 interface OutputDisplayProps {
@@ -34,6 +34,41 @@ function renderMarkdown(rawText: string): string {
 }
 
 const SCROLL_BOTTOM_THRESHOLD = 120;
+
+function SourceChips({ sources }: { sources: ReturnType<typeof getMessageSources> }) {
+  if (sources.length === 0) return null;
+
+  return (
+    <div className="bubble-sources">
+      {sources.map((s) => {
+        let host = s.url;
+        try {
+          host = new URL(s.url).hostname.replace(/^www\./, "");
+        } catch {
+          // Malformed URL from the model — fall back to showing the raw string.
+        }
+        return (
+          <a
+            key={s.url}
+            href={s.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="source-chip"
+            title={s.title || host}
+          >
+            <img
+              src={`https://www.google.com/s2/favicons?domain=${host}&sz=32`}
+              alt=""
+              width={12}
+              height={12}
+            />
+            <span>{host}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -141,7 +176,12 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
                   className={`bubble-markdown ${isLastAssistant ? "active-stream" : ""}`}
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
                 />
-                {!isLastAssistant && text.trim() && <CopyButton text={text} />}
+                {!isLastAssistant && text.trim() && (
+                  <>
+                    <SourceChips sources={getMessageSources(msg)} />
+                    <CopyButton text={text} />
+                  </>
+                )}
               </div>
             </div>
           );
