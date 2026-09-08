@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { streamText, convertToModelMessages, isStepCount } from "ai";
-import { googleAI, buildSystemInstructions } from "@/lib/ai";
+import { streamText, convertToModelMessages, isStepCount, APICallError, RetryError } from "ai";
+import { googleAI, groqAI, buildSystemInstructions } from "@/lib/ai";
 import { GiftRequestSchema } from "@/lib/schema";
 
 export const runtime = "nodejs";
@@ -13,9 +13,16 @@ export const dynamic = "force-dynamic";
  */
 function streamErrorMessage(error: unknown): string {
   console.error("Gemini stream failed:", error);
-  const msg = error instanceof Error ? error.message : String(error);
 
-  if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
+  // After retries are exhausted, streamText throws a RetryError whose own
+  // message is generic ("Failed after N attempts...") — the 429 only shows
+  // up on the wrapped `lastError`, so unwrap it before inspecting.
+  const cause = RetryError.isInstance(error) ? error.lastError : error;
+  const is429 =
+    (APICallError.isInstance(cause) && cause.statusCode === 429) ||
+    (cause instanceof Error && /RESOURCE_EXHAUSTED|\b429\b/.test(cause.message));
+
+  if (is429) {
     return "Daily free limit reached for this model. Try again later, or set AI_MODEL to a lighter model in .env.local.";
   }
   return "The genie hit a snag. Please try again.";
@@ -28,59 +35,62 @@ function streamErrorMessage(error: unknown): string {
  */
 export async function POST(req: NextRequest): Promise<Response> {
   try {
+    // 1. Parse and validate the incoming request body
     const body = await req.json().catch(() => ({}));
     const validation = GiftRequestSchema.safeParse(body);
 
     if (!validation.success) {
-      const errorMsg = validation.error.issues[0]?.message || "Invalid request body";
-      return NextResponse.json({ message: errorMsg }, { status: 400 });
+      const message = validation.error.issues[0]?.message || "Invalid request body";
+      return NextResponse.json({ message }, { status: 400 });
     }
 
-    // Guard: Ensure API key is configured
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    const { messages, prompt, userPrompt, location } = validation.data;
+
+    // 2. Determine AI provider & verify API key
+    const isGroq = process.env.AI_PROVIDER === "groq";
+
+    if (isGroq && !process.env.GROQ_API_KEY) {
+      return NextResponse.json(
+        { message: "AI API key not configured. Set GROQ_API_KEY in .env.local" },
+        { status: 503 }
+      );
+    }
+
+    if (!isGroq && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       return NextResponse.json(
         { message: "AI API key not configured. Set GOOGLE_GENERATIVE_AI_API_KEY in .env.local" },
         { status: 503 }
       );
     }
 
-    const modelName = process.env.AI_MODEL || "gemini-3.6-flash";
-    const system = buildSystemInstructions(validation.data.location);
+    // 3. Set up model, system prompt, and search grounding tools
+    const model = isGroq
+      ? groqAI(process.env.GROQ_MODEL || "openai/gpt-oss-120b")
+      : googleAI(process.env.AI_MODEL || "gemini-3.6-flash");
 
-    // Google's grounding search runs inside Google's own call — it isn't a
-    // separate client-side tool round trip like the old DuckDuckGo tool was.
-    const tools = { google_search: googleAI.tools.googleSearch({}) };
+    const tools = isGroq
+      ? undefined
+      : { google_search: googleAI.tools.googleSearch({}) };
 
-    // 1. Multi-turn conversation thread (when called via useChat)
-    if (validation.data.messages && validation.data.messages.length > 0) {
-      const modelMessages = await convertToModelMessages(validation.data.messages as any);
+    const system = buildSystemInstructions(location);
 
-      const result = streamText({
-        model: googleAI(modelName),
-        system,
-        messages: modelMessages,
-        tools,
-        stopWhen: isStepCount(2),
-      });
+    // 4. Prepare stream inputs (multi-turn conversation vs single prompt)
+    const hasMessages = Boolean(messages && messages.length > 0);
+    const streamInput = hasMessages
+      ? { messages: await convertToModelMessages(messages as any) }
+      : { prompt: (prompt || userPrompt || "").trim() };
 
-      return result.toUIMessageStreamResponse({
-        sendSources: true, // required for citation chips — defaults to false
-        onError: streamErrorMessage,
-      });
-    }
-
-    // 2. Single-turn prompt mode fallback
-    const promptText = (validation.data.prompt || validation.data.userPrompt || "").trim();
+    // 5. Generate and stream the response
     const result = streamText({
-      model: googleAI(modelName),
+      model,
       system,
-      prompt: promptText,
       tools,
       stopWhen: isStepCount(2),
+      ...streamInput,
     });
 
     return result.toUIMessageStreamResponse({
-      sendSources: true,
+      sendSources: true, // required for citation chips
       onError: streamErrorMessage,
     });
   } catch (error: any) {

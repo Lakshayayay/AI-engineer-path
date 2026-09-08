@@ -1,4 +1,5 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGroq } from "@ai-sdk/groq";
 
 /**
  * ==============================================================================
@@ -18,6 +19,15 @@ if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     "Get your free key at: https://aistudio.google.com/apikey"
   );
 }
+
+/**
+ * GROQ PROVIDER — fallback for when Gemini's free quota is exhausted.
+ * No search grounding tool; used for plain generation only.
+ * Get your free key at: https://console.groq.com/keys
+ */
+export const groqAI = createGroq({
+  apiKey: process.env.GROQ_API_KEY || "",
+});
 
 const BASE_INSTRUCTIONS = `
 You are Gift Genie, a thoughtful gift advisor. You help people find gifts that feel
