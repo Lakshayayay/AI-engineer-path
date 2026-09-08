@@ -6,19 +6,25 @@
 
 ## What it does
 
+You land on a clean prompt, not a form — a headline question, a few tappable starters ("Birthday gift for a friend, budget under $50", "Last-minute gift, needs to arrive tomorrow"), and your location already picked up in the header so pricing is right from the first message.
+
 <p align="center">
   <img src="public/assets/appphotos/homepage.jpeg" width="720" alt="Gift Genie homepage with prompt starters" />
 </p>
 
-- **Conversational, not a form** — Ask for "something for my sister" and it asks one focused follow-up instead of a wall of dropdowns. Prompt starters on the homepage get you going even faster. Say "cheaper" or "more personal" later and it revises the same picks rather than starting over.
-- **Location-aware pricing** — Detects your city automatically (no permission prompt) and prices everything in your local currency, from retailers that actually serve where you are — visible as the location pill in the header.
-- **Sign in and keep your history** — Google sign-in saves every wish list to your account, browsable from the sidebar; skip it and the app runs entirely offline in guest mode with local history.
-- **Grounded recommendations, not hallucinations** — Every suggestion is checked against a live web search, so you get real products from real retailers instead of invented brands or dead links.
-- **Streamed, real-time replies** — Responses appear token-by-token as the model writes them, structured into clear numbered picks with why-it-fits, where-to-buy, and price range for each.
+Type what you actually know — even just "my friend loves hip-hop" — and Gift Genie asks back the one question that unlocks a good answer: occasion, budget, what the person's into. No ten-field form, no guessing. Once it has enough, it streams back numbered picks in real time, each with **why it fits**, **where to get it**, and a **realistic price range** — not a generic list, an argument for that specific gift. Say "cheaper" or "more personal" and it revises those same picks instead of starting the conversation over.
 
 <p align="center">
   <img src="public/assets/appphotos/conversation.jpeg" width="720" alt="Gift Genie mid-conversation with a personalised recommendation" />
 </p>
+
+Sign in with Google and every wish list is saved to your account, browsable from the sidebar the next time you're stuck for an idea. Skip it and Gift Genie still works end-to-end in guest mode, with history kept locally in your browser instead.
+
+Under the hood, every recommendation is checked against a live web search before it reaches you, so what you get back are real products from real retailers rather than an invented brand or a link that goes nowhere.
+
+**Coming next**
+- **Clickable source citations** — surface the exact search results behind a recommendation as chips under each answer, so you can verify a pick without leaving the chat.
+- **Direct "buy now" links** — turn a recommendation straight into a purchase with a retailer deep link, instead of a name you have to search for yourself.
 
 ---
 
@@ -38,7 +44,7 @@
 
 **Design**
 
-- **Streaming-first API** — `/api/gift` is a single route handler built on `streamText` + `toUIMessageStreamResponse`, so tokens and citation sources reach the client as the model produces them instead of buffering a full response.
+- **Streaming-first API** — `/api/gift` is a single route handler built on `streamText` + `toUIMessageStreamResponse`, so tokens (and the search sources behind them) reach the client as the model produces them instead of buffering a full response.
 - **Provider fallback, not provider lock-in** — `lib/ai.ts` centralizes model selection behind one env flag (`AI_PROVIDER`), so swapping the underlying LLM is a config change, not a code change.
 - **Dual-mode persistence** — `lib/db.ts` and `lib/auth.ts` transparently switch between Supabase (when configured) and `localStorage` (when not), so the app runs zero-config out of the box and upgrades to a real backend without touching UI code.
 - **Server-owned prompt logic** — Location and conversation context are folded into the system prompt server-side (`buildSystemInstructions`) rather than trusting the client, keeping currency/locale rules and safety constraints (no invented products, no fake URLs) in one place.
