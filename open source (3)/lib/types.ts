@@ -5,12 +5,7 @@
 // --------------------------------------------------------------------------
 // Model-related types
 // --------------------------------------------------------------------------
-
-/** The bounding box coordinates returned by the object-detection model.
- *  Values are raw fractions (0–1) when the pipeline is called with
- *  `percentage: true`, and raw pixel values otherwise.
- */
-export interface BoundingBox {
+export interface BoundingBox { // basically typing for the output of the ai
   xmin: number
   ymin: number
   xmax: number
@@ -28,13 +23,6 @@ export interface Detection {
 // Application state types
 // --------------------------------------------------------------------------
 
-/**
- * Tracks what the detector is currently doing.
- *
- * State machine:
- *   idle → loading-model → ready → detecting → done
- *                                             ↘ error
- */
 export type DetectorStatus =
   | 'idle'            // app first opens, nothing has happened yet
   | 'loading-model'   // downloading + compiling the ONNX model from HF Hub
