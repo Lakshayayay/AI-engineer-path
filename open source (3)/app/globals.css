@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+/* ─── Design tokens ──────────────────────────────────────────────────────────
+   We define all colors as CSS custom properties on :root so they're easy
+   to override or theme later without touching component code.
+
+   Color choices:
+   - Background: near-white (#fafafa) — softer than pure white, reduces eye strain
+   - Foreground: near-black (#0a0a0a) — high contrast without harshness
+   - Muted: subtle grey used for secondary text and disabled states
+   - Primary: the single accent color used for highlights, links, progress bars
+   - Border: a very subtle line color so panels feel distinct without being heavy
+   - Card: slightly elevated surface for panels — same as background here,
+     differentiated by border instead of shadow (cleaner, taste-skill approved)
+*/
+
+:root {
+  --background: 250 250 250;         /* #fafafa */
+  --foreground: 10 10 10;            /* #0a0a0a */
+  --card: 255 255 255;               /* #ffffff */
+  --card-foreground: 10 10 10;
+  --border: 229 229 229;             /* #e5e5e5 — neutral-200 */
+  --muted: 244 244 245;              /* #f4f4f5 — zinc-100 */
+  --muted-foreground: 113 113 122;   /* #71717a — zinc-500 */
+  --primary: 24 24 27;               /* #18181b — zinc-900: neutral, not loud */
+  --primary-foreground: 250 250 250;
+  --destructive: 239 68 68;          /* red-500 */
+  --ring: 24 24 27;
+  --radius: 0.5rem;
+  --font-geist: 'Geist', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ─── Base layer ─────────────────────────────────────────────────────────── */
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    border-color: rgb(var(--border));
+  }
+
+  body {
+    background-color: rgb(var(--background));
+    color: rgb(var(--foreground));
+    font-family: var(--font-geist);
+    /* Slightly tighter line-height for dense data UIs */
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* ─── Utility shims (bridging Tailwind v4 → CSS var pattern) ─────────────── */
+/* These let our components use shorthand class names like bg-background,
+   text-muted-foreground, border-border, etc. */
+
+@layer utilities {
+  .bg-background      { background-color: rgb(var(--background)); }
+  .bg-foreground      { background-color: rgb(var(--foreground)); }
+  .bg-card            { background-color: rgb(var(--card)); }
+  .bg-muted           { background-color: rgb(var(--muted)); }
+  .bg-primary         { background-color: rgb(var(--primary)); }
+
+  .text-foreground    { color: rgb(var(--foreground)); }
+  .text-background    { color: rgb(var(--background)); }
+  .text-muted-foreground { color: rgb(var(--muted-foreground)); }
+  .text-primary       { color: rgb(var(--primary)); }
+  .text-destructive   { color: rgb(var(--destructive)); }
+
+  .border-border      { border-color: rgb(var(--border)); }
+  .border-primary     { border-color: rgb(var(--primary)); }
+
+  .accent-primary     { accent-color: rgb(var(--primary)); }
+}
+
+/* ─── Scrollbar styling ───────────────────────────────────────────────────── */
+/* Thin, unobtrusive scrollbars inside the detection list */
+
+.overflow-y-auto::-webkit-scrollbar {
+  width: 4px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: rgb(var(--border));
+  border-radius: 2px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted-foreground));
+}
