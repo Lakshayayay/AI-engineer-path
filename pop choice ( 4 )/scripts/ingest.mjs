@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { embedMany } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { embed } from 'ai';
+import { google } from '@ai-sdk/google';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -17,8 +17,8 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error("Missing Supabase credentials in .env.local");
 }
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("Missing OPENAI_API_KEY in .env.local");
+if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+  throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY in .env.local");
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -33,11 +33,15 @@ async function main() {
   // We use the raw text content to capture the semantic meaning of the movie
   const contents = movies.map((m) => m.content);
 
-  console.log('Generating embeddings via OpenAI...');
-  const { embeddings } = await embedMany({
-    model: openai.embedding('text-embedding-3-small'),
-    values: contents,
-  });
+  console.log('Generating embeddings via Gemini...');
+  const embeddings = [];
+  for (const content of contents) {
+    const { embedding } = await embed({
+      model: google.textEmbeddingModel('gemini-embedding-001'),
+      value: content,
+    });
+    embeddings.push(embedding);
+  }
 
   console.log('Embeddings generated. Inserting into Supabase...');
 

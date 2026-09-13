@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { useChat } from "ai/react";
 
 type Screen = "start" | "questions" | "results";
 
@@ -11,6 +10,13 @@ interface PersonAnswers {
   era: "new" | "classic" | null;
   mood: "fun" | "serious" | "inspiring" | "scary" | null;
   islandPerson: string;
+}
+
+interface MovieResult {
+  title: string;
+  year: string;
+  description: string;
+  posterUrl: string;
 }
 
 // ----------------------------------------------------------------------
@@ -332,46 +338,59 @@ function QuestionsScreen({
 
 function ResultsScreen({
   isLoading,
-  streamingResponse,
-  onGoAgain,
+  result,
+  onNextMovie,
 }: {
   isLoading: boolean;
-  streamingResponse: string;
-  onGoAgain: () => void;
+  result: MovieResult | null;
+  onNextMovie: () => void;
 }) {
   return (
     <div className="bg-[#000c36] min-h-full flex flex-col items-center">
       <div className="flex flex-col px-[34px] pt-8 gap-4 flex-1 w-full max-w-[393px]">
-        {/* Header */}
-        <p className="text-white text-[30px] text-center leading-normal font-roboto-slab font-bold">
-          Your AI Recommendation
-        </p>
-
-        {/* LLM Streaming output */}
-        <div className="bg-[#1a2547] rounded-[10px] p-5 min-h-[400px]">
-          {isLoading && !streamingResponse ? (
-            <p className="text-white/70 animate-pulse font-roboto-slab text-[18px]">
-              Analyzing your preferences...
+        {isLoading || !result ? (
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-white/70 animate-pulse font-roboto-slab text-[20px]">
+              Finding the perfect movie...
             </p>
-          ) : (
-            <p className="text-white text-[18px] leading-relaxed font-roboto-slab whitespace-pre-wrap">
-              {streamingResponse}
+          </div>
+        ) : (
+          <>
+            {/* Header Title */}
+            <p className="text-white text-[24px] text-center leading-normal font-roboto-slab font-bold">
+              {result.title} ({result.year})
             </p>
-          )}
-        </div>
 
-        {/* Buttons */}
-        <div className="flex flex-col gap-3 pb-6 mt-4">
-          <button
-            onClick={onGoAgain}
-            className="rounded-[10px] h-[71px] w-full flex items-center justify-center"
-            style={{ backgroundColor: "#51e08a" }}
-          >
-            <span className="text-[#000c36] text-[30px] font-roboto-slab font-bold">
-              Go Again
-            </span>
-          </button>
-        </div>
+            {/* Poster */}
+            <div className="relative w-full aspect-[2/3] rounded-[10px] overflow-hidden mt-2 bg-black/20">
+              <Image
+                src={result.posterUrl || "https://placehold.co/400x600/000c36/FFFFFF?text=No+Poster+Found"}
+                alt={`${result.title} poster`}
+                fill
+                className="object-cover"
+                unoptimized
+              />
+            </div>
+
+            {/* Description */}
+            <p className="text-white text-[15px] leading-relaxed font-roboto-slab mt-4 mb-4">
+              {result.description}
+            </p>
+
+            {/* Next Movie Button */}
+            <div className="mt-auto pb-6">
+              <button
+                onClick={onNextMovie}
+                className="rounded-[10px] h-[71px] w-full flex items-center justify-center"
+                style={{ backgroundColor: "#51e08a" }}
+              >
+                <span className="text-[#000c36] text-[28px] font-roboto-slab font-bold">
+                  Next Movie
+                </span>
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -386,17 +405,19 @@ export default function PopChoiceApp() {
   const [numPeople, setNumPeople] = useState(1);
   const [currentPerson, setCurrentPerson] = useState(1);
   const [answers, setAnswers] = useState<PersonAnswers[]>([]);
-
-  // Vercel AI SDK hook for streaming the chat completion
-  const { messages, append, isLoading, setMessages } = useChat({
-    api: "/api/chat",
-  });
+  
+  // V2 Specific State
+  const [result, setResult] = useState<MovieResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [excludeTitles, setExcludeTitles] = useState<string[]>([]);
+  const [prompt, setPrompt] = useState("");
 
   // Flow handlers
   function handleStart(n: number, duration: string) {
     setNumPeople(n);
     setCurrentPerson(1);
     setAnswers([]);
+    setExcludeTitles([]);
     setScreen("questions");
   }
 
@@ -410,8 +431,7 @@ export default function PopChoiceApp() {
       // Finished all people! Submit to AI backend.
       setScreen("results");
       
-      // Create a nice prompt summarizing all answers
-      const prompt = `I need a movie recommendation. We are ${numPeople} people.
+      const newPrompt = `I need a movie recommendation. We are ${numPeople} people.
 Here are our preferences:
 ${newAnswers
   .map(
@@ -423,20 +443,42 @@ ${newAnswers
   .join("\n")}
 Please find the best movie that matches these combined preferences from your database.`;
 
-      await append({ role: "user", content: prompt });
+      setPrompt(newPrompt);
+      fetchRecommendation(newPrompt, []);
     }
   }
 
-  function handleGoAgain() {
-    setScreen("start");
-    setAnswers([]);
-    setCurrentPerson(1);
-    setMessages([]); // Reset the chat history
+  async function fetchRecommendation(currentPrompt: string, excluded: string[]) {
+    setIsLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: currentPrompt, excludeTitles: excluded }),
+      });
+      const data = await res.json();
+      setResult(data);
+    } catch (e) {
+      console.error(e);
+      setResult({
+        title: "Error",
+        year: "N/A",
+        description: "Sorry, there was an issue finding your movie.",
+        posterUrl: "https://placehold.co/400x600/000c36/FFFFFF?text=Error",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
-  // Get the last assistant message to display as the streamed response
-  const assistantMessages = messages.filter((m) => m.role === "assistant");
-  const latestResponse = assistantMessages[assistantMessages.length - 1]?.content || "";
+  function handleNextMovie() {
+    if (result && result.title) {
+      const newExcluded = [...excludeTitles, result.title];
+      setExcludeTitles(newExcluded);
+      fetchRecommendation(prompt, newExcluded);
+    }
+  }
 
   return (
     <main>
@@ -451,8 +493,8 @@ Please find the best movie that matches these combined preferences from your dat
       {screen === "results" && (
         <ResultsScreen
           isLoading={isLoading}
-          streamingResponse={latestResponse}
-          onGoAgain={handleGoAgain}
+          result={result}
+          onNextMovie={handleNextMovie}
         />
       )}
     </main>
