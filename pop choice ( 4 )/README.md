@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PopChoice + PopStream
 
-## Getting Started
+**PopChoice** is a quiz that recommends one movie for a group. **PopStream** is a Netflix-style dashboard over the same catalogue, with free-to-watch classics playable in-app.
 
-First, run the development server:
+Built with Next.js 16 (App Router), Supabase (Postgres + pgvector), Gemini via the Vercel AI SDK, and LangGraph.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## How it works
+
+```
+Wikidata + Wikipedia + OMDb + archive.org
+        │  scripts/pipeline  (extract → transform → load)
+        ▼
+Supabase: movies · movie_chunks (768-dim embeddings + full-text) · watch_sources
+        │  hybrid_search() = vector + keyword, merged with Reciprocal Rank Fusion
+        ▼
+src/lib/recommend.ts   LangGraph: plan → retrieve → grade → revise (loop) → pick
+        │
+        ├─ POST /api/chat        → PopChoice quiz   (src/app/(popchoice))
+        └─ src/lib/movies.ts     → PopStream        (src/app/(stream): /browse, /title/[id], /watch/[id])
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+cp .env.example .env.local   # fill in the keys
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Run `supabase/migrations/*.sql` in order (the last one, `005`, creates the current schema).
+2. Load data: `npm run pipeline -- all --limit 100`.
+3. `npm run dev`, then open `/` (quiz) or `/browse` (PopStream).
 
-## Learn More
+## Data pipeline
 
-To learn more about Next.js, take a look at the following resources:
+`npm run pipeline -- [extract|transform|load|all] [--limit N]`. Raw responses are cached in `data/raw/` (gitignored), and the load only re-embeds chunks whose text changed, so re-runs are cheap.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Free-tier limits to plan around:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Service | Limit |
+| --- | --- |
+| OMDb | 1,000 requests/day |
+| Gemini embeddings | 100 requests/minute (each chunk counts as one), plus a daily cap. Set `EMBED_DELAY_MS=65000` for larger loads. |
+| Watchmode (optional) | 2,500 calls/month; "where to watch" is hidden without a key |
 
-## Deploy on Vercel
+`CONTACT` (an email or URL) is required: Wikimedia asks every API client to identify itself in its User-Agent.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scripts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command | What it does |
+| --- | --- |
+| `npm run dev` / `build` / `start` | Next.js |
+| `npm run lint` | ESLint |
+| `npm run test:pipeline` | Unit tests for the pipeline's pure transform logic |
+
+## Data and licensing
+
+Plots are from Wikipedia (CC BY-SA), facts and posters from OMDb (CC BY-NC), and free films from the Internet Archive (only items confirmed playable and public domain). TMDB is deliberately not used because its terms forbid AI applications. PopStream is a non-commercial learning project.
