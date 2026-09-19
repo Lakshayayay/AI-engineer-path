@@ -28,7 +28,7 @@ interface MovieResult {
 
 function PopChoiceLogo() {
   return (
-    <div className="flex flex-col items-center gap-2 pt-8 pb-4">
+    <div className="flex flex-col items-center gap-2 pt-4 pb-4">
       <Image
         src="/logo.png"
         alt="PopChoice logo"
@@ -83,6 +83,9 @@ function StartScreen({
   return (
     <div className="bg-[#000c36] min-h-full flex flex-col items-center">
       <div className="w-full max-w-[393px]">
+        <Link href="/" className="block px-[34px] pt-5 text-[14px] font-roboto-slab text-white/70 underline underline-offset-4">
+          Back to PopStream
+        </Link>
         <PopChoiceLogo />
 
         <div className="flex flex-col gap-4 px-[34px] pt-6">
@@ -387,10 +390,14 @@ function ResultsScreen({
                 className="rounded-[10px] h-[56px] w-full flex items-center justify-center border-2 border-[#51e08a]"
               >
                 <span className="text-[#51e08a] text-[20px] font-roboto-slab font-bold">
-                  {result.watchable ? "▶ Watch now" : "Where to watch"}
+                  {result.watchable ? "▶ Watch now" : "See details"}
                 </span>
               </Link>
             )}
+
+            <Link href="/" className="text-center text-[14px] font-roboto-slab text-white/70 underline underline-offset-4">
+              Browse PopStream
+            </Link>
 
             {/* Next Movie Button */}
             <div className="mt-auto pb-6">
