@@ -2,7 +2,7 @@
 // Every response is cached under data/raw/, and existing files are skipped, so the job is resumable.
 import path from 'node:path';
 import { RAW, exists, politeFetch, readJson, writeJson } from './common.mjs';
-import { parseCatalog, selectFilms } from './transform.mjs';
+import { CREDIT_PROPS, groupWikidataCredits, parseCatalog, selectFilms } from './transform.mjs';
 
 const SPARQL = 'https://query.wikidata.org/sparql';
 
@@ -98,6 +98,30 @@ async function extractArchive() {
   console.log(`archive: vetted ${candidates.length} candidates (${fetched} newly fetched)`);
 }
 
+// Cast/crew/studio/topics for every selected film: one SPARQL request per 50 films, split into one cached file per film.
+async function extractCredits(films) {
+  const todo = [];
+  for (const f of films) if (!(await exists(path.join(RAW, 'credits', `${f.qid}.json`)))) todo.push(f.qid);
+  const props = Object.keys(CREDIT_PROPS).map((p) => `wdt:${p}`).join(' ');
+  let fetched = 0;
+  for (let i = 0; i < todo.length; i += 50) {
+    const batch = todo.slice(i, i + 50);
+    const query = `SELECT ?film ?prop ?valLabel WHERE {
+      VALUES ?film { ${batch.map((q) => `wd:${q}`).join(' ')} }
+      VALUES ?p { ${props} }
+      ?film ?p ?val .
+      BIND(REPLACE(STR(?p), "^.*/", "") AS ?prop)
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }
+    }`;
+    const res = await politeFetch(`${SPARQL}?format=json&query=${encodeURIComponent(query)}`);
+    if (!res.ok) { console.warn(`wikidata credits: HTTP ${res.status}, will retry on next run`); continue; }
+    const grouped = groupWikidataCredits(await res.json());
+    for (const q of batch) await writeJson(path.join(RAW, 'credits', `${q}.json`), grouped[q] ?? {}); // {} = asked, nothing found
+    fetched += batch.length;
+  }
+  console.log(`credits: ${todo.length} needed, ${fetched} fetched`);
+}
+
 export async function extractAll({ limit } = {}) {
   await extractCatalog();
   await extractArchive();
@@ -121,4 +145,5 @@ export async function extractAll({ limit } = {}) {
     if ((i + 1) % 100 === 0) console.log(`extract: ${i + 1}/${films.length}`, stats);
   }
   console.log('extract: done', stats);
+  await extractCredits(films);
 }

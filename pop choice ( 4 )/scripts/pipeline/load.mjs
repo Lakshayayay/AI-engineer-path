@@ -19,7 +19,7 @@ export async function loadAll() {
 
   const file = path.join(PROCESSED, 'movies.jsonl');
   const films = (await fs.readFile(file, 'utf8')).split('\n').filter(Boolean).map((l) => JSON.parse(l));
-  const stats = { movies: 0, embedded: 0, unchanged: 0, deleted: 0 };
+  const stats = { movies: 0, credits: 0, embedded: 0, facts: 0, unchanged: 0, deleted: 0 };
 
   for (let i = 0; i < films.length; i += MOVIE_BATCH) {
     const batch = films.slice(i, i + MOVIE_BATCH);
@@ -31,6 +31,17 @@ export async function loadAll() {
     if (error) throw error;
     const idOf = new Map(saved.map((r) => [r.imdb_id, r.id]));
     stats.movies += saved.length;
+
+    // Credits: replace each film's rows (small, cheap, idempotent).
+    const ids = [...idOf.values()];
+    const { error: ec } = await db.from('credits').delete().in('movie_id', ids);
+    if (ec) throw ec;
+    const creditRows = batch.flatMap((f) => f.credits.map((c) => ({ movie_id: idOf.get(f.movie.imdb_id), ...c })));
+    for (let k = 0; k < creditRows.length; k += 500) {
+      const { error: ei } = await db.from('credits').insert(creditRows.slice(k, k + 500));
+      if (ei) throw ei;
+    }
+    stats.credits += creditRows.length;
 
     const { data: existing, error: e2 } = await db
       .from('movie_chunks').select('movie_id, chunk_index, content_hash').in('movie_id', [...idOf.values()]);
@@ -54,8 +65,17 @@ export async function loadAll() {
       }
     }
 
-    for (let j = 0; j < todo.length; j += EMBED_BATCH) {
-      const part = todo.slice(j, j + EMBED_BATCH);
+    // The keyword-only facts chunks are stored without an embedding.
+    const facts = todo.filter((c) => c.kind === 'facts').map((c) => ({ ...c, embedding: null }));
+    if (facts.length) {
+      const { error: ef } = await db.from('movie_chunks').upsert(facts, { onConflict: 'movie_id,chunk_index' });
+      if (ef) throw ef;
+      stats.facts += facts.length;
+    }
+    const embeddable = todo.filter((c) => c.kind !== 'facts');
+
+    for (let j = 0; j < embeddable.length; j += EMBED_BATCH) {
+      const part = embeddable.slice(j, j + EMBED_BATCH);
       const { embeddings } = await embedMany({
         model: google.embedding('gemini-embedding-001'),
         values: part.map((c) => c.content),

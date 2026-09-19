@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChunks, buildMovie, cleanOmdb, dedupeCatalog, extractSections, isPlayable, parseCatalog } from './transform.mjs';
+import { buildChunks, buildMovie, cleanOmdb, dedupeCatalog, extractSections, groupWikidataCredits, isPlayable, parseCatalog, parseCredits } from './transform.mjs';
 
 const omdbRaw = {
   Response: 'True', Type: 'movie', imdbID: 'tt0133093', Title: 'The Matrix', Year: '1999', Rated: 'R',
@@ -107,4 +107,38 @@ test('buildMovie drops films with no OMDb match or no plot, and gates archive_id
   assert.equal(ok.movie.archive_id, 'the_matrix_ia');
   const locked = await buildMovie({ catalog, omdb: omdbRaw, wiki: { extract: wikiText }, archive: { restricted: true, license: null, files: [] } });
   assert.equal(locked.movie.archive_id, null);
+});
+
+test('parseCredits merges OMDb billing order with Wikidata, dedupes, strips writer notes, caps the cast', () => {
+  const omdb = { Actors: 'Tom Hanks, Meg Ryan', Director: 'Nora Ephron', Writer: 'Nora Ephron (screenplay), Jeff Arch (story)', Production: 'N/A' };
+  const wd = { P161: ['meg ryan', 'Bill Pullman'], P86: ['Marc Shaiman'], P272: ['TriStar Pictures'], P921: ['Love'], P840: ['Seattle'] };
+  const { credits, tags } = parseCredits(omdb, wd);
+  const of = (role) => credits.filter((c) => c.role === role).map((c) => c.name);
+  assert.deepEqual(of('actor'), ['Tom Hanks', 'Meg Ryan', 'Bill Pullman']);
+  assert.deepEqual(of('writer'), ['Nora Ephron', 'Jeff Arch']);
+  assert.deepEqual(of('composer'), ['Marc Shaiman']);
+  assert.deepEqual(of('studio'), ['TriStar Pictures']);
+  assert.deepEqual(tags, ['love', 'seattle']);
+  assert.equal(credits.find((c) => c.name === 'Meg Ryan').billing, 2);
+
+  const many = parseCredits({ Actors: Array.from({ length: 30 }, (_, i) => `Actor ${i}`).join(', ') });
+  assert.equal(many.credits.filter((c) => c.role === 'actor').length, 15);
+});
+
+test('groupWikidataCredits groups by film and property and drops unlabelled Q-ids', () => {
+  const row = (film, prop, label) => ({ film: { value: `http://www.wikidata.org/entity/${film}` }, prop: { value: prop }, valLabel: { value: label } });
+  const g = groupWikidataCredits({ results: { bindings: [row('Q1', 'P86', 'Hans Zimmer'), row('Q1', 'P86', 'Hans Zimmer'), row('Q1', 'P161', 'Q999'), row('Q2', 'P272', 'Pixar')] } });
+  assert.deepEqual(g, { Q1: { P86: ['Hans Zimmer'] }, Q2: { P272: ['Pixar'] } });
+});
+
+test('buildChunks appends a keyword-only facts chunk LAST without changing earlier hashes', async () => {
+  const movie = cleanOmdb(omdbRaw);
+  const before = await buildChunks(movie, { plot: 'A hacker wakes up.', reception: null });
+  const { credits, tags } = parseCredits({ Actors: 'Keanu Reeves' }, { P86: ['Don Davis'], P272: ['Warner Bros.'] });
+  const after = await buildChunks(movie, { plot: 'A hacker wakes up.', reception: null }, { credits, tags });
+  assert.equal(after.length, before.length + 1);
+  assert.deepEqual(after.slice(0, -1), before);
+  const facts = after.at(-1);
+  assert.equal(facts.kind, 'facts');
+  assert.match(facts.content, /Music by Don Davis\. .*Produced by Warner Bros\./);
 });

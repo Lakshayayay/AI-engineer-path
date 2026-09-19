@@ -67,7 +67,60 @@ export function cleanOmdb(raw) {
     overview: na(raw.Plot),
     rating: na(raw.imdbRating) ? parseFloat(raw.imdbRating) : null,
     poster_url: na(raw.Poster),
+    awards: na(raw.Awards),
+    countries: list(raw.Country),
+    languages: list(raw.Language),
   };
+}
+
+// Wikidata property -> credit role (or 'tag' for topics). Also the property list extract.mjs asks for.
+export const CREDIT_PROPS = {
+  P161: 'actor', P57: 'director', P58: 'writer', P86: 'composer', P344: 'cinematographer', P272: 'studio',
+  P921: 'tag', P840: 'tag', P144: 'tag', P136: 'tag',
+};
+const CAST_MAX = 15;
+const ROLE_ORDER = ['actor', 'director', 'writer', 'composer', 'cinematographer', 'studio'];
+
+// Wikidata SPARQL rows for a batch of films -> { qid: { P161: [labels], ... } }. Unlabelled entities (raw Q-ids) are dropped.
+export function groupWikidataCredits(sparqlJson) {
+  const out = {};
+  for (const b of sparqlJson.results.bindings) {
+    const label = b.valLabel?.value;
+    if (!label || /^Q\d+$/.test(label)) continue;
+    const film = (out[qid(b.film.value)] ??= {});
+    const labels = (film[b.prop.value] ??= []);
+    if (!labels.includes(label)) labels.push(label);
+  }
+  return out;
+}
+
+// "Frank Darabont (screenplay), Stephen King (based on...)" -> ['Frank Darabont', 'Stephen King']
+const people = (v) => list(v?.replace(/\s*\([^)]*\)/g, ''));
+
+// Merge OMDb's people (already in billing order) with Wikidata's extras into credits[] and tags[].
+// OMDb comes first so its billing order wins; Wikidata fills in composer, cinematographer, studio and extra names.
+export function parseCredits(omdbRaw, wd = {}) {
+  const byRole = {
+    actor: [...people(omdbRaw?.Actors), ...(wd.P161 ?? [])],
+    director: [...people(omdbRaw?.Director), ...(wd.P57 ?? [])],
+    writer: [...people(omdbRaw?.Writer), ...(wd.P58 ?? [])],
+    composer: wd.P86 ?? [],
+    cinematographer: wd.P344 ?? [],
+    studio: [...list(omdbRaw?.Production), ...(wd.P272 ?? [])],
+  };
+  const credits = [];
+  for (const role of ROLE_ORDER) {
+    const seen = new Set();
+    for (const name of byRole[role]) {
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (role === 'actor' && seen.size > CAST_MAX) break;
+      credits.push({ name, role, billing: seen.size });
+    }
+  }
+  const tags = [...new Set(['P921', 'P840', 'P144', 'P136'].flatMap((p) => wd[p] ?? []).map((t) => t.toLowerCase()))];
+  return { credits, tags };
 }
 
 const PLOT_HEADINGS = /^(plot|plot summary|synopsis|premise|story|summary)$/i;
@@ -108,7 +161,7 @@ const splitter = new RecursiveCharacterTextSplitter({ chunkSize: 1000, chunkOver
 
 // Chunk 0 is a "profile" (metadata + short plot) so names/genres are findable by keyword search.
 // Every other chunk is prefixed with the title so it still makes sense when retrieved alone.
-export async function buildChunks(movie, { plot, reception }) {
+export async function buildChunks(movie, { plot, reception }, { credits = [], tags = [] } = {}) {
   const label = `${movie.title} (${movie.release_year})`;
   const profile = [
     `${label}.`,
@@ -125,11 +178,25 @@ export async function buildChunks(movie, { plot, reception }) {
   for (const c of (await splitter.splitText(plot ?? '')).slice(0, 9)) parts.push({ kind: 'plot', content: `${label}, plot: ${c}` });
   for (const c of (await splitter.splitText(reception ?? '')).slice(0, 2)) parts.push({ kind: 'reception', content: `${label}, reception: ${c}` });
 
+  // Keyword-only "facts" chunk, appended LAST so earlier chunk hashes never change. Names are found by exact
+  // full-text/trigram match, so it is stored without an embedding (0 Gemini calls).
+  const names = (role) => credits.filter((c) => c.role === role).map((c) => c.name);
+  const line = (prefix, items) => (items.length ? `${prefix} ${items.join(', ')}.` : null);
+  const facts = [
+    label + '.',
+    line('Starring', names('actor')), line('Directed by', names('director')), line('Written by', names('writer')),
+    line('Music by', names('composer')), line('Cinematography by', names('cinematographer')),
+    line('Produced by', names('studio')), line('Topics:', tags),
+    movie.countries?.length && `Country: ${movie.countries.join(', ')}.`,
+    movie.awards && `Awards: ${movie.awards}.`,
+  ].filter(Boolean).join(' ');
+  if (credits.length || tags.length) parts.push({ kind: 'facts', content: `${label}, facts: ${facts}` });
+
   return parts.map((p, i) => ({ chunk_index: i, kind: p.kind, content: p.content, content_hash: sha256(p.content) }));
 }
 
 // One film: raw inputs in, {movie, chunks} or {drop: reason} out.
-export async function buildMovie({ catalog, omdb, wiki, archive }) {
+export async function buildMovie({ catalog, omdb, wiki, archive, wikidata }) {
   const clean = cleanOmdb(omdb);
   if (!clean) return { drop: 'no_omdb' };
   const sections = extractSections(wiki?.extract);
@@ -145,7 +212,9 @@ export async function buildMovie({ catalog, omdb, wiki, archive }) {
     archive_id: catalog.archiveId && isPlayable(archive, year) ? catalog.archiveId : null,
     popularity: catalog.links,
   };
-  return { movie, chunks: await buildChunks(movie, { ...sections, plot }) };
+  const { credits, tags } = parseCredits(omdb, wikidata);
+  movie.tags = tags;
+  return { movie, credits, chunks: await buildChunks(movie, { ...sections, plot }, { credits, tags }) };
 }
 
 // ---- disk I/O below ----
@@ -186,8 +255,9 @@ export async function transformAll({ limit } = {}) {
     if (omdb === undefined) { drops.not_extracted = (drops.not_extracted ?? 0) + 1; continue; }
     const wiki = await read('wiki', catalog.imdb);
     const archive = catalog.archiveId ? await read('archive', catalog.archiveId) : null;
+    const wikidata = await read('credits', catalog.qid);
 
-    const built = await buildMovie({ catalog, omdb, wiki, archive });
+    const built = await buildMovie({ catalog, omdb, wiki, archive, wikidata });
     if (built.drop) { drops[built.drop] = (drops[built.drop] ?? 0) + 1; continue; }
     out.push(JSON.stringify(built));
   }
