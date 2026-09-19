@@ -39,9 +39,7 @@ Every result says **why it matched**: a credit ("With Tom Hanks"), a plot line (
 
 Can't decide? **Ask PopChoice** reads the plots and gives one pick with a written reason, then offers *Play free*, *Details* or *Another pick*. It only runs when you press the button, because it uses AI credits.
 
-<!-- TODO: uncomment when public/pics/ask-pick.png shows a real written reason (see docs/screenshots-todo.md)
 <img src="public/pics/ask-pick.png" alt="PopChoice pick: poster, title and a written reason why it fits" width="800" />
--->
 
 ### 3. A home screen that learns your taste
 
@@ -63,9 +61,7 @@ Each title page shows the cast and crew (every name links to their other films),
 
 **Your taste** shows everything the app remembers. You can remove a liked film, or press **Clear my history** to wipe it.
 
-<!-- TODO: uncomment when public/pics/you.png shows the Your taste page (see docs/screenshots-todo.md)
 <img src="public/pics/you.png" alt="Your taste page: films you like, recent searches, how it works, clear history" width="800" />
--->
 
 ### 6. Group quiz
 
@@ -202,7 +198,6 @@ src/
     watchmode.ts           optional "where to watch"
 scripts/pipeline/          extract, transform, load (+ tests)
 supabase/migrations/       001 … 006 (006 is the current search and taste schema)
-docs/                      notes, including the screenshot to-do
 ```
 
 ## Run it locally
