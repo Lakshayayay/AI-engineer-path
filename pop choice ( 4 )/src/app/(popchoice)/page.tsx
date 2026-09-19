@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 
 type Screen = "start" | "questions" | "results";
 
@@ -13,8 +14,10 @@ interface PersonAnswers {
 }
 
 interface MovieResult {
+  id?: number; // absent on error results
+  watchable?: boolean; // true = free to play in PopStream
   title: string;
-  year: string;
+  year: string | number | null;
   description: string;
   posterUrl: string;
 }
@@ -245,7 +248,7 @@ function QuestionsScreen({
           {/* Q1 */}
           <div>
             <p className="text-white text-[16px] mb-2 font-roboto-slab">
-              What's your favorite movie and why?
+              What&apos;s your favorite movie and why?
             </p>
             <textarea
               value={favoriteMovie}
@@ -377,6 +380,18 @@ function ResultsScreen({
               {result.description}
             </p>
 
+            {/* Watch / where-to-watch (PopStream) */}
+            {result.id !== undefined && (
+              <Link
+                href={result.watchable ? `/watch/${result.id}` : `/title/${result.id}`}
+                className="rounded-[10px] h-[56px] w-full flex items-center justify-center border-2 border-[#51e08a]"
+              >
+                <span className="text-[#51e08a] text-[20px] font-roboto-slab font-bold">
+                  {result.watchable ? "▶ Watch now" : "Where to watch"}
+                </span>
+              </Link>
+            )}
+
             {/* Next Movie Button */}
             <div className="mt-auto pb-6">
               <button
@@ -409,15 +424,17 @@ export default function PopChoiceApp() {
   // V2 Specific State
   const [result, setResult] = useState<MovieResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [excludeTitles, setExcludeTitles] = useState<string[]>([]);
+  const [excludeIds, setExcludeIds] = useState<number[]>([]);
   const [prompt, setPrompt] = useState("");
+  const [duration, setDuration] = useState("");
 
   // Flow handlers
   function handleStart(n: number, duration: string) {
     setNumPeople(n);
+    setDuration(duration);
     setCurrentPerson(1);
     setAnswers([]);
-    setExcludeTitles([]);
+    setExcludeIds([]);
     setScreen("questions");
   }
 
@@ -430,8 +447,12 @@ export default function PopChoiceApp() {
     } else {
       // Finished all people! Submit to AI backend.
       setScreen("results");
+
+
+
+      // sending the detials and stuff to the ai model with the context
       
-      const newPrompt = `I need a movie recommendation. We are ${numPeople} people.
+      const newPrompt = `I need a movie recommendation. We are ${numPeople} people and we have ${duration} to watch.
 Here are our preferences:
 ${newAnswers
   .map(
@@ -448,16 +469,26 @@ Please find the best movie that matches these combined preferences from your dat
     }
   }
 
-  async function fetchRecommendation(currentPrompt: string, excluded: string[]) {
+  // fetching the reccomendations from the ai model one
+  async function fetchRecommendation(currentPrompt: string, excluded: number[]) {
     setIsLoading(true);
     setResult(null);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: currentPrompt, excludeTitles: excluded }),
+        body: JSON.stringify({ prompt: currentPrompt, excludeIds: excluded }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        setResult({
+          title: "No movie found",
+          year: "N/A",
+          description: data.error ?? "Sorry, there was an issue finding your movie.",
+          posterUrl: "https://placehold.co/400x600/000c36/FFFFFF?text=No+Match",
+        });
+        return;
+      }
       setResult(data);
     } catch (e) {
       console.error(e);
@@ -473,11 +504,10 @@ Please find the best movie that matches these combined preferences from your dat
   }
 
   function handleNextMovie() {
-    if (result && result.title) {
-      const newExcluded = [...excludeTitles, result.title];
-      setExcludeTitles(newExcluded);
-      fetchRecommendation(prompt, newExcluded);
-    }
+    // Exclude by id (titles collide across remakes). Error results have no id, so "Try again" just re-runs.
+    const newExcluded = result?.id !== undefined ? [...excludeIds, result.id] : excludeIds;
+    setExcludeIds(newExcluded);
+    fetchRecommendation(prompt, newExcluded);
   }
 
   return (
