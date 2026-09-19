@@ -8,7 +8,7 @@ always_on: true
 
 ## 1. Project Overview & Mission
 - **Application**: Pop Choice — an AI-powered intelligent movie recommendation application.
-- **Core Stack**: Modern Web (Vite, Vanilla JS/CSS), Supabase (PostgreSQL + `pgvector`), OpenAI Embeddings & Chat Completion APIs, Supabase MCP tooling.
+- **Core Stack**: Next.js App Router (TypeScript, Tailwind), Supabase (PostgreSQL + `pgvector`), Gemini via the Vercel AI SDK, LangGraph for the recommendation flow, Supabase MCP tooling.
 - **Goal**: Move from fundamental AI engineering concepts to a production-ready, industry-grade application through active, hands-on development ("learn by making").
 
 ---
@@ -31,16 +31,16 @@ always_on: true
 1. **Supabase & Database Practices**:
    - Active Supabase Project: `POP choice` (Ref: `bqprlhfixgcpfhxthrss`).
    - Use Supabase MCP tools (`list_tables`, `execute_sql`, `apply_migration`, `get_advisors`) to inspect and execute schema operations.
-   - Vector Search: Always leverage PostgreSQL `pgvector` with indexed similarity matching (cosine distance `<=>`, IVFFlat / HNSW) and encapsulated Database Functions (`RPC`) for performant querying.
+   - Vector Search: Always leverage PostgreSQL `pgvector` with indexed similarity matching (cosine distance `<=>`, HNSW) and encapsulated Database Functions (`RPC`, e.g. `hybrid_search`) for performant querying.
 2. **Security & Configuration**:
    - Never commit sensitive service role keys to client bundles.
-   - Separate configuration cleanly in `config.js` and `.env`.
+   - Keep secrets in `.env.local` (gitignored); document every variable in `.env.example`.
 3. **Modular Architecture**:
    - Maintain clear separation of concerns:
-     - Configuration & clients (`config.js`)
-     - Data processing & ingestion (`content.js`, ingestion scripts)
-     - Core app logic & vector queries (`index.js`)
-     - UI presentation & user experience (`index.html`, `index.css`)
+     - Data access & vector queries (`src/lib/movies.ts`, `src/lib/watchmode.ts`)
+     - Recommendation flow (`src/lib/recommend.ts`, `src/app/api/chat/route.ts`)
+     - Data pipeline (`scripts/pipeline/`)
+     - UI (`src/app/(popchoice)/` quiz, `src/app/(stream)/` PopStream)
 4. **Resilience & UX**:
    - Handle asynchronous states gracefully (loading indicators, error boundaries, empty states).
    - Ensure the UI looks polished, modern, and production-grade.
