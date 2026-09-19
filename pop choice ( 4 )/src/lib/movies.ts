@@ -21,6 +21,9 @@ export interface Filters {
   minRating?: number;
 }
 
+export type Role = 'actor' | 'director' | 'writer' | 'composer' | 'cinematographer' | 'studio';
+export const ROLES: Role[] = ['actor', 'director', 'writer', 'composer', 'cinematographer', 'studio'];
+
 export interface MovieCard {
   id: number;
   title: string;
@@ -39,6 +42,10 @@ export interface Movie extends MovieCard {
   cast: string[];
   overview: string | null;
   wikiUrl: string | null;
+  awards: string | null;
+  countries: string[];
+  languages: string[];
+  tags: string[];
 }
 
 export interface Candidate extends MovieCard {
@@ -49,7 +56,24 @@ export interface Candidate extends MovieCard {
   cast: string[];
   chunk: string; // best-matching chunk of text for this movie
   score: number;
+  // Why it matched: which chunk type won and which retrieval arms found it.
+  chunkKind: string;
+  viaMeaning: boolean;
+  viaKeywords: boolean;
+  viaTaste: boolean;
 }
+
+export interface Suggestion {
+  kind: 'title' | 'person' | 'studio';
+  label: string;
+  mainRole: Role | null;
+  films: number;
+  movieId: number | null;
+  posterUrl: string | null;
+  score: number;
+}
+
+export interface CreditMatch { movieId: number; name: string; role: Role }
 
 let client: SupabaseClient | null = null;
 function db() {
@@ -85,6 +109,7 @@ export async function hybridSearch(args: {
   excludeIds?: number[];
   onlyWatchable?: boolean;
   matchCount?: number;
+  viewerId?: string;
 }): Promise<Candidate[]> {
   const f = args.filters ?? {};
   const { data, error } = await db().rpc('hybrid_search', {
@@ -98,6 +123,7 @@ export async function hybridSearch(args: {
     min_rating: f.minRating ?? null,
     exclude_ids: args.excludeIds ?? [],
     only_watchable: args.onlyWatchable ?? false,
+    viewer_id: args.viewerId ?? null,
   });
   if (error) throw error;
   return (data as any[]).map((r) => ({
@@ -109,6 +135,10 @@ export async function hybridSearch(args: {
     cast: r.cast_names,
     chunk: r.chunk_content,
     score: r.score,
+    chunkKind: r.chunk_kind,
+    viaMeaning: r.via_meaning,
+    viaKeywords: r.via_keywords,
+    viaTaste: r.via_taste,
   }));
 }
 
@@ -133,6 +163,10 @@ export async function getMovie(id: number): Promise<Movie | null> {
     cast: data.cast_names,
     overview: data.overview,
     wikiUrl: data.wiki_url,
+    awards: data.awards,
+    countries: data.countries ?? [],
+    languages: data.languages ?? [],
+    tags: data.tags ?? [],
   };
 }
 
@@ -152,6 +186,61 @@ export async function listMovies(opts: {
   const { data, error } = await q;
   if (error) throw error;
   return (data as any[]).map(card);
+}
+
+// Autocomplete and "did you mean": titles, people and studios ranked by trigram similarity.
+export async function suggest(q: string, n = 6): Promise<Suggestion[]> {
+  const { data, error } = await db().rpc('suggest', { q, n });
+  if (error) throw error;
+  return (data as any[]).map((r) => ({
+    kind: r.kind,
+    label: r.label,
+    mainRole: r.main_role,
+    films: r.films,
+    movieId: r.movie_id,
+    posterUrl: r.poster_url,
+    score: r.score,
+  }));
+}
+
+// Which credited person/studio explains why each of these films matched the query text.
+export async function creditMatches(q: string, ids: number[]): Promise<CreditMatch[]> {
+  if (!ids.length) return [];
+  const { data, error } = await db().rpc('credit_matches', { q, ids });
+  if (error) throw error;
+  return (data as any[]).map((r) => ({ movieId: r.movie_id, name: r.name, role: r.role }));
+}
+
+export async function getCredits(movieId: number): Promise<Record<Role, string[]>> {
+  const { data, error } = await db().from('credits').select('name, role').eq('movie_id', movieId).order('billing', { nullsFirst: false });
+  if (error) throw error;
+  const out = Object.fromEntries(ROLES.map((r) => [r, [] as string[]])) as Record<Role, string[]>;
+  for (const r of data as any[]) out[r.role as Role].push(r.name);
+  return out;
+}
+
+// Films with, by or from a person/studio (exact name), grouped by the role they had.
+export async function moviesByName(name: string): Promise<{ role: Role; movies: MovieCard[] }[]> {
+  const { data, error } = await db()
+    .from('credits')
+    .select('role, movies(id, title, release_year, poster_url, archive_id, popularity)')
+    .eq('name', name);
+  if (error) throw error;
+  const byRole = new Map<Role, any[]>();
+  for (const r of data as any[]) byRole.set(r.role, [...(byRole.get(r.role) ?? []), r.movies]);
+  return ROLES.filter((r) => byRole.has(r)).map((role) => ({
+    role,
+    movies: byRole.get(role)!.sort((a, b) => b.popularity - a.popularity).map(card),
+  }));
+}
+
+// Cards for specific ids, in the order given.
+export async function moviesByIds(ids: number[]): Promise<MovieCard[]> {
+  if (!ids.length) return [];
+  const { data, error } = await db().from('movies').select('id, title, release_year, poster_url, archive_id').in('id', ids);
+  if (error) throw error;
+  const byId = new Map((data as any[]).map((r) => [r.id, card(r)]));
+  return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
 export { db as serviceDb };
