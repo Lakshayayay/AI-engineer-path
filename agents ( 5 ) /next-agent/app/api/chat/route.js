@@ -1,6 +1,12 @@
 import { streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { tools } from "@/lib/tools";
+
+// Groq exposes an OpenAI-compatible API, so the existing provider works with a custom baseURL
+const groq = createOpenAI({
+  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: process.env.GROQ_API_KEY,
+});
 
 // Set max duration for edge/serverless functions
 export const maxDuration = 30;
@@ -9,10 +15,10 @@ export async function POST(req) {
   try {
     const { messages } = await req.json();
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: "Missing OPENAI_API_KEY. Please set your key in `next-agent/.env.local` to enable the agent." }),
+        JSON.stringify({ error: "Missing GROQ_API_KEY. Please set your key in `next-agent/.env.local` to enable the agent." }),
         { status: 401, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -30,7 +36,7 @@ export async function POST(req) {
     `;
 
     const result = streamText({
-      model: openai(process.env.OPENAI_MODEL || "gpt-4o"),
+      model: groq.chat(process.env.GROQ_MODEL || "openai/gpt-oss-120b"),
       system: systemPrompt,
       messages,
       tools,
