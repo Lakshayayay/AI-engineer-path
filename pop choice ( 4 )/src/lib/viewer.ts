@@ -4,8 +4,8 @@ import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { moviesByIds, serviceDb, similarMovies, type MovieCard } from './movies';
 
-export const VIEWER_COOKIE = 'pc_viewer';
-export const ONBOARDED_COOKIE = 'pc_onboarded';
+const VIEWER_COOKIE = 'pc_viewer';
+const ONBOARDED_COOKIE = 'pc_onboarded';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const YEAR = 60 * 60 * 24 * 365;
 
@@ -31,7 +31,7 @@ export async function clearViewer(viewer: string) {
   jar.delete(ONBOARDED_COOKIE);
 }
 
-export interface Signals {
+interface Signals {
   liked: number[];                // newest first, latest rating wins ("unrate" removes)
   disliked: number[];
   played: number[];               // newest first, distinct

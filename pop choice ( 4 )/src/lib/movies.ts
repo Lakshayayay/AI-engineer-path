@@ -22,7 +22,7 @@ export interface Filters {
 }
 
 export type Role = 'actor' | 'director' | 'writer' | 'composer' | 'cinematographer' | 'studio';
-export const ROLES: Role[] = ['actor', 'director', 'writer', 'composer', 'cinematographer', 'studio'];
+const ROLES: Role[] = ['actor', 'director', 'writer', 'composer', 'cinematographer', 'studio'];
 
 export interface MovieCard {
   id: number;
@@ -73,7 +73,7 @@ export interface Suggestion {
   score: number;
 }
 
-export interface CreditMatch { movieId: number; name: string; role: Role }
+interface CreditMatch { movieId: number; name: string; role: Role }
 
 let client: SupabaseClient | null = null;
 function db() {

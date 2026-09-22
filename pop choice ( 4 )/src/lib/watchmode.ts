@@ -8,7 +8,7 @@ export interface WatchSource {
   url: string;
   price: number | null;
 }
-export interface WatchInfo {
+interface WatchInfo {
   sources: WatchSource[];
   trailerUrl: string | null; // YouTube embed URL
 }

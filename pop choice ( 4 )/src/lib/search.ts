@@ -5,7 +5,7 @@ import { parseQuery, type Chip } from './query';
 
 export interface Why { label: string; snippet?: string }
 export interface SearchHit extends Candidate { why: Why; forYou: boolean }
-export interface SearchOutcome {
+interface SearchOutcome {
   hits: SearchHit[];
   chips: Chip[];
   residual: string;

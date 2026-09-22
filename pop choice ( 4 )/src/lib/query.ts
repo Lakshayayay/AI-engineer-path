@@ -1,7 +1,7 @@
 // Plain-words filters: "90s comedy under 2 hours" -> filters + removable chips + leftover text.
 // Pure (no imports) so it runs in the browser, the server and the node test runner.
 
-export interface QueryFilters {
+interface QueryFilters {
   genres?: string[];
   yearMin?: number;
   yearMax?: number;
@@ -10,7 +10,7 @@ export interface QueryFilters {
   onlyWatchable?: boolean;
 }
 export interface Chip { key: string; label: string }
-export interface ParsedQuery { filters: QueryFilters; chips: Chip[]; residual: string }
+interface ParsedQuery { filters: QueryFilters; chips: Chip[]; residual: string }
 
 const GENRE_WORDS: Record<string, string> = {
   action: 'Action', adventure: 'Adventure', animated: 'Animation', animation: 'Animation', cartoon: 'Animation',

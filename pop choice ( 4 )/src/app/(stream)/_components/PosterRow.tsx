@@ -7,7 +7,7 @@ import { ScrollRow } from "./ScrollRow";
 const NO_POSTER = "https://placehold.co/300x450/00072a/FFFFFF?text=No+Poster";
 const badge = "rounded bg-butter px-1.5 py-0.5 text-[11px] font-bold text-night";
 
-export function PosterCard({ movie, forYou }: { movie: MovieCard; forYou?: boolean }) {
+function PosterCard({ movie, forYou }: { movie: MovieCard; forYou?: boolean }) {
   return (
     <Link href={`/title/${movie.id}`} role="listitem" className="group w-[140px] shrink-0 snap-start md:w-[170px]">
       <div className="relative aspect-[2/3] overflow-hidden rounded-md bg-slate/40 transition-transform motion-safe:group-hover:-translate-y-1 motion-safe:group-focus-visible:-translate-y-1">
