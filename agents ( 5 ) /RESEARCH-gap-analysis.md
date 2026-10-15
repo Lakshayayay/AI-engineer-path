@@ -1,7 +1,7 @@
 # RESEARCH: Skill gaps for AI engineering roles
 
 **Status:** Research, nothing built yet. **Date:** 2026-10-15. **Scope:** `agents ( 5 )`.
-**Plan:** Vercel AI SDK (TypeScript) first, OpenAI Agents SDK (Python) second.
+**Plan:** Vercel AI SDK (TypeScript), AI writes the code. No Python here: my core track (`resources/ROADMAP.md`, Python workspace) molds these topics into Python at its matching level.
 **Use:** watch the lectures with section 6 in hand, then bring back what you learned and we close gaps by building.
 
 ---
@@ -59,7 +59,7 @@ Limits: next-agent is on AI SDK **v4** (current is v7). The only test is a small
 
 ## 4. Gaps
 
-✅ have  🟡 partial  ❌ gap. Priority: **P0** needed in most roles, **P1** often, **P2** bonus.
+✅ have  🟡 partial  ❌ gap  → core: owned by my Python core track (level shown). Priority: **P0** needed in most roles, **P1** often, **P2** bonus.
 
 | Area | Topic | Status | Priority |
 |---|---|:-:|:-:|
@@ -71,21 +71,21 @@ Limits: next-agent is on AI SDK **v4** (current is v7). The only test is a small
 | | Multi-agent patterns (agent-as-tool, handoffs, supervisor) | 🟡 | P1 |
 | | Durable, resumable agents | ❌ | P2 |
 | Quality | **Evals** (golden sets, LLM-as-judge, regression in CI) | ❌ | P0 |
-| | **Tracing and monitoring** (OpenTelemetry, Langfuse or LangSmith) | ❌ | P0 |
+| | **Tracing and monitoring** (Langfuse, same tool as the core track) | ❌ | P0 |
 | | **Tests** (unit and agent-level) | ❌ | P0 |
 | | Cost, latency, token tracking; retrieval evals | ❌ | P1 |
 | Integration | RAG, embeddings, hybrid search | ✅ | – |
 | | **MCP** (build one server, one client) | ❌ | P0 |
 | | Enterprise APIs, OAuth, RBAC | 🟡 | P1 |
-| | Messy data (CSV, PDF, SQL) | 🟡 | P2 |
+| | Messy data (CSV, PDF, SQL) | → core L1–L2 | P2 |
 | Safety | Guardrails, prompt injection, least privilege, PII | ❌ | P1 |
 | Production | Docker, CI/CD, cloud deploy | ❌ | P1 |
 | | Rate limits, retries, queues | 🟡 | P1 |
-| | Kubernetes | ❌ | P2 |
-| Python | **Python, async, Pydantic, pytest** | ❌ | P0 |
-| | FastAPI | ❌ | P1 |
-| | OpenAI Agents SDK, LangGraph in Python | 🟡 | P1 |
-| Non-code | Scoping a vague problem in writing, demos, status updates | ❌ | P0 for FDE |
+| | Kubernetes | → core L6 | P2 |
+| Python | **Python, async, Pydantic, pytest** | → core L0 (async L3) | P0 |
+| | FastAPI | → core L3 | P1 |
+| | OpenAI Agents SDK, LangGraph in Python | → core L3/L6 | P1 |
+| Non-code | Scoping a vague problem in writing, demos, status updates | → core (client pack) | P0 for FDE |
 | | One domain (finance, healthcare) | ❌ | P2 |
 
 Later: fine-tuning, self-hosting (vLLM), A2A, voice, computer use.
@@ -105,7 +105,7 @@ Checked on official pages: AI SDK 7 shipped 2026-06-25, needs Node 22+, and has 
 | Guardrails | No built-in version: Zod plus your own checks |
 | Handoffs | An agent that calls another agent as a tool |
 
-Depth: **Vercel AI SDK deep, OpenAI Agents SDK second, LangGraph revisit in Python.**
+Depth: **Vercel AI SDK deep. OpenAI Agents SDK: this table only. Python frameworks: core track (Level 3/6).**
 
 ---
 
@@ -130,12 +130,8 @@ Depth: **Vercel AI SDK deep, OpenAI Agents SDK second, LangGraph revisit in Pyth
 | 3 | Build an MCP server and connect it | MCP, integration |
 | 4 | Multi-agent split plus guardrails | Safety |
 | 5 | Docker, CI, deploy | Production |
-| 6 | Python twin: OpenAI Agents SDK + FastAPI | Python |
-| 7 | **Master project** | All |
 
-**Master project idea (not decided):** a customer-ops copilot. It answers from docs (RAG), acts on a CRM through an MCP server with human approval, is scored by an eval suite, is traced, and ships in Docker with CI. It comes with a written scoping doc and demo.
-
-**Decisions for you:** is that master project the right one, and should the Python track start after Stage 3 or earlier?
+**Decided (2026-10-15):** no master project here; the core track's P6.M is the one. No Python here; the core track molds each topic at its level.
 
 ---
 
