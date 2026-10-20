@@ -15,7 +15,7 @@ This repo is my **build-with-AI lane**: modern AI-engineering topics built in Ty
 | `learning depoloyment (2)` | DreamCatcher | Express + SQLite, deployment basics |
 | `open source (3)` | DetectAI | In-browser ML with Transformers.js |
 | `pop choice ( 4 )` | PopStream / PopChoice | RAG, hybrid search, LangGraph |
-| `agents ( 5 )` | next-agent | Tool calling and the agent loop |
+| `agents ( 5 )` | next-agent, OpenSwap (`scrimba agents`) | Tool calling and the agent loop |
 | `agentic workflow` | Empty placeholder | Next topic |
 
 ## Reply style (always on)
@@ -48,25 +48,80 @@ When I ask about current tools, SDKs, versions, frameworks, pricing or what the 
 - Give exact counts, names and versions, with dates. Say what is unverified or comes only from blogs and vendors.
 - End with a Sources list.
 
+## Plan with me first (always on)
+
+Before any non-trivial change (new logic, or more than one file), show me this and wait for my OK:
+
+1. **File map.** Each file you will touch and its one job.
+2. **Data flow.** One arrow line, e.g. `browser → route → agent loop → tool → store → back`.
+3. **Block steps.** For each new function, its steps in plain English. These lines become the code comments.
+
+After coding, walk me through what changed with `file:line`. One-line edits skip this.
+
+## How we write code (always on)
+
+The model is `agents ( 5 ) /scrimba agents` (OpenSwap). Its shape is what makes code easy for me to follow, so copy it in any language. When unsure, open that project and match it.
+
+**Structure**
+- Folders by role: entry and routes → logic (`agent/`) → data and outside APIs (`store/`) → UI (`frontend/`).
+- Keep routes thin: check input, call the logic, reply. No business logic in a route.
+- Prompts and tool schemas live in their own files, apart from the agent loop.
+- Check env vars at startup and stop with a message that says how to fix it. Never print a secret's value.
+- Split UI into a controller (state and network calls) and a view (DOM or JSX only).
+- Wrap storage in a small API (`create`, `get`, `list`, `save`), so moving to a real DB changes one file.
+- Send the client an allow-list of fields, never the whole server object.
+
+**Inside a file**
+- Main exported function first, helpers below, so the file reads top to bottom.
+- One job per function. Verb names that say the job: `describeGitHubFailure`, `formatAgo`, `shapeRepoHealth`.
+- Guard clauses: check bad input at the top and return early.
+- Named constants near the top, no magic values: `RELEASE_WINDOW_DAYS = 90`.
+- Shrink outside data to the few fields the next step needs.
+- If an optional part fails, carry on with a warning. If a required part fails, stop with a clear error.
+
+**Comments**
+- One short plain-English line above each logical block: what it does and why.
+- Explain surprises in outside APIs, and the key option in an API call.
+- Don't restate the code. No leftover challenge, hint or TODO notes.
+
+```js
+// Reject empty input before it can spend a model request
+// GitHub's open_issues_count includes open pull requests.
+// tool_choice: "none" is what guarantees text instead of another tool call.
+```
+
 ## Code standard (always on)
 
 Write production-level code, simple and readable.
 
 **General**
 - TypeScript in strict mode. No `any`. Type props and function boundaries. Use `unknown` in `catch`.
-- Small, single-purpose functions and components. Names say intent. Named constants, no magic values.
-- Comments explain *why*, not *what*. No dead code, no unused dependencies, no copy-paste, no abstraction before it's needed.
-- Validate at trust boundaries: request bodies, env vars, model and tool inputs (Zod). Use correct HTTP status codes. Show users a friendly error and log the detail on the server.
+- No dead code, no unused dependencies, no copy-paste, no abstraction before it's needed.
+- Validate at trust boundaries: request bodies, env vars, model and tool inputs (Zod). Use correct HTTP status codes (404 for a missing record, not 500). Show users one friendly error shape and log the detail on the server.
 - Secrets live in env vars on the server only. Never commit `.env*`. Add new variables to `.env.example`.
-- UI: handle loading, error and empty states. Basic accessibility: labels, `aria-label` on icon buttons, keyboard works.
+- UI: handle loading, error and empty states. Basic accessibility: labels, `aria-label` on icon buttons, keyboard works. Sanitize model Markdown before rendering it as HTML.
 
-**AI-specific**
-- Stream responses. Keep API keys server-side.
-- Validate tool arguments with a schema. Never run model output as code (`eval`).
-- Bound every agent loop (max steps, max duration). Return tool failures to the model as data.
+**AI and agents**
+- Stream responses. Keep API keys server-side. Never run model output as code (`eval`).
+- Tool schemas: strict, no extra properties, descriptions with examples and limits.
+- Every tool returns one shape: `{ status: "ok" | "no_results" | "error", retryable, message, result }`. The message tells the model what to try next.
+- Look up tool handlers in one `{ name: handler }` map. Parse tool arguments inside `try`. A bad tool call returns an error result and never crashes the run.
+- Bound every agent loop (max steps, max duration). When steps run out, make one last call with tools off (`tool_choice: "none"`) and have the model say what it couldn't verify.
+- Keep two histories: what the user sees, and the full model context. The model context stays on the server.
 - Handle rate limits and provider errors. Surface streaming errors to the UI.
 - Pin the AI SDK major version, and check the installed version's API before writing code. Majors differ a lot.
 - Ground answers in tools or retrieved data. Don't let the model invent facts.
+
+**Production checklist (mention, don't force)**
+I'm building comfort first. When a change touches one of these, point out the gap in one line. Build the fix only when I say.
+- Timeouts on every outside call (model, APIs).
+- Storage that is safe when two requests arrive at once (a DB, not a JSON file).
+- Input length limits, rate limits, then auth before anything spends model credits.
+- Trim or summarize model context as a conversation grows.
+- Run independent calls in parallel.
+- Logs with a request ID. No raw prompts or secrets in production logs.
+- Test tool handlers without the model. Keep a few saved questions (evals) to check prompt changes.
+- Treat tool output as data, never as instructions.
 
 **Working rules**
 - Before saying something works, run it (typecheck, the app, a request). Report real output, including failures.
