@@ -15,7 +15,7 @@ This repo is my **build-with-AI lane**: modern AI-engineering topics built in Ty
 | `learning depoloyment (2)` | DreamCatcher | Express + SQLite, deployment basics |
 | `open source (3)` | DetectAI | In-browser ML with Transformers.js |
 | `pop choice ( 4 )` | PopStream / PopChoice | RAG, hybrid search, LangGraph |
-| `agents ( 5 )` | next-agent, OpenSwap (`scrimba agents`) | Tool calling and the agent loop |
+| `agents ( 5 )` | OpenSwap (`oswap`) | Tool calling and the agent loop |
 | `agentic workflow` | Empty placeholder | Next topic |
 
 ## Reply style (always on)
@@ -60,7 +60,7 @@ After coding, walk me through what changed with `file:line`. One-line edits skip
 
 ## How we write code (always on)
 
-The model is `agents ( 5 ) /scrimba agents` (OpenSwap). Its shape is what makes code easy for me to follow, so copy it in any language. When unsure, open that project and match it.
+The model is `agents ( 5 ) /oswap` (OpenSwap). Its shape is what makes code easy for me to follow, so copy it in any language. When unsure, open that project and match it.
 
 **Structure**
 - Folders by role: entry and routes → logic (`agent/`) → data and outside APIs (`store/`) → UI (`frontend/`).
