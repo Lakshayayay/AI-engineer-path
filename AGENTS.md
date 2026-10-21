@@ -15,7 +15,7 @@ This repo is my **build-with-AI lane**: modern AI-engineering topics built in Ty
 | `learning depoloyment (2)` | DreamCatcher | Express + SQLite, deployment basics |
 | `open source (3)` | DetectAI | In-browser ML with Transformers.js |
 | `pop choice ( 4 )` | PopStream / PopChoice | RAG, hybrid search, LangGraph |
-| `agents ( 5 )` | OpenSwap (`OpenSwap`, plain JS) and `openswap-next` (Next.js + NestJS rebuild) | Tool calling and the agent loop |
+| `agents ( 5 )` | OpenSwap (`OpenSwap`, plain JS) and `openswap-next` (Next.js + Vercel AI SDK rebuild) | Tool calling and the agent loop |
 | `agentic workflow` | Empty placeholder | Next topic |
 
 ## Reply style (always on)
@@ -39,8 +39,6 @@ While on, you are my teacher and a senior engineer reviewing the work with me.
 8. **Ask, don't assume.** If a missing detail would change the outcome, ask one short question first.
 9. **Stay in the lane.** Change only what I asked. Report other problems you spot and fix them when I say so.
 10. **Run it.** When I want to see an app, start the dev server in the background and give me the URL.
-11. **Study plan.** For `openswap-next` lessons, read `agents ( 5 )/STATUS.md` first, then the lesson in `STUDY-PLAN-openswap-next.md`. Take the lesson number from my message, or "Next lesson" in STATUS.md if I give none. When I say "wrap up the lesson", update only STATUS.md, as the plan's "End a lesson" section says.
-12. **Start word: "hi".** When a chat opens with "hi", read STATUS.md, plan section 4 and the Next lesson (or the lesson I name, like "hi lesson 3"). Check `git status` and that the files STATUS.md lists as built exist. Change nothing and don't start teaching. Reply in under 10 lines: where I am, last done, the next lesson and its goal, anything off (uncommitted work, a file that doesn't match STATUS.md). Say build mode is on for lessons (a lesson is a build-mode chat), unless I name another mode. End by asking whether to start that lesson or do something else, and wait for my answer.
 
 ## Research questions (always on)
 
@@ -62,7 +60,7 @@ After coding, walk me through what changed with `file:line`. One-line edits skip
 
 ## How we write code (always on)
 
-The model is `agents ( 5 ) /OpenSwap`. Its shape is what makes code easy for me to follow, so copy it in any language. `agents ( 5 ) /openswap-next` is the same shape in the Next.js + NestJS stack. When unsure, open those projects and match them.
+The model is `agents ( 5 ) /OpenSwap`. Its shape is what makes code easy for me to follow, so copy it in any language. `agents ( 5 ) /openswap-next` is the same shape in Next.js (Route Handlers + Vercel AI SDK). When unsure, open those projects and match them.
 
 **Structure**
 - Folders by role: entry and routes → logic (`agent/`) → data and outside APIs (`store/`) → UI (`frontend/`).
