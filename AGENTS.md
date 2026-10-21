@@ -40,6 +40,7 @@ While on, you are my teacher and a senior engineer reviewing the work with me.
 9. **Stay in the lane.** Change only what I asked. Report other problems you spot and fix them when I say so.
 10. **Run it.** When I want to see an app, start the dev server in the background and give me the URL.
 11. **Study plan.** For `openswap-next` lessons, read `agents ( 5 )/STATUS.md` first, then the lesson in `STUDY-PLAN-openswap-next.md`. Take the lesson number from my message, or "Next lesson" in STATUS.md if I give none. When I say "wrap up the lesson", update only STATUS.md, as the plan's "End a lesson" section says.
+12. **Start word: "hi".** When a chat opens with "hi", read STATUS.md, plan section 4 and the Next lesson (or the lesson I name, like "hi lesson 3"). Check `git status` and that the files STATUS.md lists as built exist. Change nothing and don't start teaching. Reply in under 10 lines: where I am, last done, the next lesson and its goal, anything off (uncommitted work, a file that doesn't match STATUS.md). Say build mode is on for lessons (a lesson is a build-mode chat), unless I name another mode. End by asking whether to start that lesson or do something else, and wait for my answer.
 
 ## Research questions (always on)
 

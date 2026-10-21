@@ -7,7 +7,9 @@
 
 ## Start a lesson in a new chat
 
-Paste this. Change the number to the "Next lesson" in STATUS.md. You start at Lesson 0, and go in order.
+Type **`hi`**. Claude reads [STATUS.md](STATUS.md), section 4 and the next lesson, checks the repo matches, and tells you in a few lines where you are. It changes nothing and waits for your answer (start that lesson, or something else). To pick a lesson yourself, type `hi lesson 3`. You start at Lesson 0, and go in order.
+
+If Claude doesn't react to "hi", paste this instead:
 
 ```
 build mode · openswap-next · Lesson 0
