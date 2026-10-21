@@ -54,7 +54,7 @@ export async function runAgent({ client, contextHistory, userPrompt }) {
     // Process each tool call in the order they were requested.
     for (const toolCall of toolCalls) {
       console.log("Tool call requested:", toolCall.name);
-      console.log("Arguments:", toolCall.arguments);
+      console.log("Arguments:", toolCall.arguments); // arguments are defined in the tools shape
 
       const result = await runTool(toolCall);
       console.log(
