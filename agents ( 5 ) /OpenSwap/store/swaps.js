@@ -20,7 +20,7 @@ export async function searchSwaps({ query } = {}) {
     throw new Error("Simulated database failure");
   }
 
-  await simulateLatency();
+  await simulateLatency(); // just for practice you know
 
   // Search the database entries for every match.
   const results = swaps.filter((swap) => matchesQuery(swap, query));
