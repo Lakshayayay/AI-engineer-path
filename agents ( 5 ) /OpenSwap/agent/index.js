@@ -36,7 +36,11 @@ export async function runAgent({ client, contextHistory, userPrompt }) {
     console.log(turnResponse.output);
 
     // Preserve the model's whole output turn for the next request.
+    // becuase we gotta send the whole input history and context rather than just the message
     inputContext.push(...turnResponse.output);
+
+
+    // yes maybe - multiple tool calls
 
     // Create a list of all tool calls requested in this turn.
     const toolCalls = turnResponse.output.filter(
@@ -56,7 +60,7 @@ export async function runAgent({ client, contextHistory, userPrompt }) {
       console.log("Tool call requested:", toolCall.name);
       console.log("Arguments:", toolCall.arguments); // arguments are defined in the tools shape
 
-      const result = await runTool(toolCall);
+      const result = await runTool(toolCall); // actual function below
       console.log(
         `Tool result [${result.status}]:`,
         result.message || `${result.result?.length ?? 0} items`
@@ -93,9 +97,12 @@ export async function runAgent({ client, contextHistory, userPrompt }) {
   }
 }
 
+
+// this is the function actual running the tool call
 async function runTool(toolCall) {
   // Parse the tool's JSON arguments.
   const toolInput = JSON.parse(toolCall.arguments);
+  // we took two things - 1) tool argument and 2) tool name
 
   try {
     // Run the store function for the tool the model requested.

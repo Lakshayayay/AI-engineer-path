@@ -41,6 +41,8 @@ app.post("/api/conversations", async (_req, res) => {
 });
 
 // Reopen the visible transcript. Model history stays on the server.
+// the chathistory is sent back and the context history stays inside the server
+// which is then given back to the - agents to work
 app.get("/api/conversations/:conversationId", async (req, res) => {
   try {
     const conversationId = req.params.conversationId;
