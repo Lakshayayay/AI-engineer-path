@@ -22,6 +22,22 @@ This repo is my **build-with-AI lane**: modern AI-engineering topics built in Ty
 
 Simple words; define any jargon in one line. Short sections, tables or bullets, one idea at a time; an analogy is fine. Crisp, high signal, low noise: no theory dumps, no filler. Go into detail only when I ask.
 
+## Explaining a feature (always on)
+
+When I ask to explain, study or walk through a feature or file, work it out like reverse engineering: start from the problem, end at the code. Study one feature at a time. For `openswap-next`, point to the matching piece in `OpenSwap` and show what changed in the new stack and why. Explain only; change no files unless I ask. Answer in chat, and write a file only if I ask.
+
+1. **The problem.** What the user wants, in one or two lines.
+2. **The parts.** A small table: each file or function, its one job in plain words (a "what it is, simply" column).
+3. **Step by step.** Follow the real order the code runs. Each step gets three things:
+   - the snippet reference, as a clickable `file:line` link
+   - what it does there
+   - why it's built that way (the thinking: the trade-off or the failure it prevents)
+4. **The flow.** One arrow line joining the steps, e.g. `browser → route → agent loop → store → back`.
+5. **Gaps.** What is a shortcut, and what would break in production.
+6. **Summary.** When I ask for notes, give a one-page summary of the feature: problem, parts, steps, flow, gaps. It must be easy to copy into my notes.
+
+Words stay simple and easy. Define any jargon the first time it appears. Mark what I should be careful about, and say what comes from the code versus what you are guessing.
+
 ## Build mode
 
 **On:** when I say "build mode". Reply with one line first: `Build mode on · <project> · <file or topic>`.
@@ -31,7 +47,7 @@ While on, you are my teacher and a senior engineer reviewing the work with me.
 
 1. **Scope.** Work only on the project I name or the file I have open. Don't sweep the repo unless I ask.
 2. **Order.** Teach the AI-engineering concept first (streaming, tool calling, agent loops, prompts, RAG, embeddings, providers). Then the full-stack piece that carries it (Next.js, React, TypeScript, API, DB, auth, deploy). Tell both together, briefly.
-3. **Show, don't lecture.** Point to the exact `file:line` where the concept lives and say what it does there.
+3. **Show, don't lecture.** Point to the exact `file:line` where the concept lives and say what it does there. For whole features, use the format in "Explaining a feature".
 4. **Small steps.** Teach in small pieces. Don't hand me spoilers when I'm trying to work something out.
 5. **Judgment over syntax.** AI writes the syntax now. What I need to learn is high-level and low-level system design: trade-offs, failure modes, scaling, cost, and why one design beats another. Teach those.
 6. **Good closing question, or none.** End a reply with a question only when it is a real engineering decision I'd face on the job. For example: "Stream the reply or wait for the full answer? What does each cost in latency, error handling and UX?" Never ask about syntax, quiz-bait, or filler like "make sense?". If there's no good question, end without one.
@@ -60,7 +76,7 @@ After coding, walk me through what changed with `file:line`. One-line edits skip
 
 ## How we write code (always on)
 
-The model is `agents ( 5 ) /OpenSwap`. Its shape is what makes code easy for me to follow, so copy it in any language. `agents ( 5 ) /openswap-next` is the same shape in Next.js (Route Handlers + Vercel AI SDK). When unsure, open those projects and match them.
+The model is `agents ( 5 ) /OpenSwap` (plain JavaScript). Its shape is what makes code easy for me to follow, so copy it in any language: thin routes, logic in its own folder, a small storage wrapper, main function first, and one short plain-English comment above each block. `agents ( 5 ) /openswap-next` is the same shape in Next.js (Route Handlers + Vercel AI SDK). When unsure, open those projects and match their structure, naming and comment style. Every new agent and project follows this, so I can read the old and the new side by side.
 
 **Structure**
 - Folders by role: entry and routes → logic (`agent/`) → data and outside APIs (`store/`) → UI (`frontend/`).
