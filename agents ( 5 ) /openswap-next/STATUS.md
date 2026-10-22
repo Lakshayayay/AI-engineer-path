@@ -73,4 +73,3 @@ Stack versions in `web/package.json` (carets allow minor updates): `ai ^7.0.148`
 ## Housekeeping
 
 - `openswap-next/api/` is untracked and holds a `.env` and `node_modules`. It is not committed. Add a `.gitignore` before anyone commits it, and decide what it is for.
-- Pending, not started: a `/usage` cleanup. The `figma` plugin and the `/figma:figma-generate-design` skill were flagged as big shares of usage, and the search and lookup agent definitions may be able to use a cheaper model. So far only read-only checks were done: `figma@claude-plugins-official` is enabled at user scope, and no project-level `.claude/settings.json` was found under `~/Desktop`. Nothing has been changed. Each change is to be shown before it is made. An edit to a plugin's `SKILL.md` in `~/.claude/plugins/cache/` will be overwritten on a plugin update.
