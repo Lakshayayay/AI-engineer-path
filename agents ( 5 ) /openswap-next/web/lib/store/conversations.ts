@@ -1,25 +1,34 @@
-import { readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import type { BrowserConversation, Conversation, ConversationSummary } from "../types";
+import type { ModelMessage } from "ai";
+import type { Database, Json } from "../supabase/database.types";
+import type { Db } from "../supabase/server";
+import type { BrowserConversation, ChatMessage, Conversation, ConversationSummary } from "../types";
 
 const NEW_CONVERSATION_TITLE = "New conversation";
 
-// Every saved conversation lives in this one JSON file. The server owns it, so the browser never reads it.
-const CONVERSATIONS_FILE = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "conversations.json");
+type ConversationRow = Database["public"]["Tables"]["conversations"]["Row"];
+type ConversationInsert = Database["public"]["Tables"]["conversations"]["Insert"];
+
+// Every function takes the request's `db` client. Row Level Security makes it see only the signed-in user's chats.
 
 // The sidebar only needs labels and IDs, ordered by the latest activity.
-export async function listConversations(): Promise<ConversationSummary[]> {
-  const conversations = await readConversations();
+export async function listConversations(db: Db): Promise<ConversationSummary[]> {
+  const { data, error } = await db
+    .from("conversations")
+    .select("id, title, updated_at")
+    .order("updated_at", { ascending: false });
 
-  return conversations
-    .map(({ id, title, updatedAt }) => ({ id, title, updatedAt }))
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  if (error) throw error;
+
+  return data.map(({ id, title, updated_at }) => ({ id, title, updatedAt: updated_at }));
 }
 
 // Continuing a conversation needs its chat history and complete agent context.
-export async function getConversation(id: string): Promise<Conversation | null> {
-  const conversations = await readConversations();
-  return conversations.find((conversation) => conversation.id === id) ?? null;
+export async function getConversation(db: Db, id: string): Promise<Conversation | null> {
+  const { data, error } = await db.from("conversations").select("*").eq("id", id).maybeSingle();
+
+  if (error) throw error;
+
+  return data ? toConversation(data) : null;
 }
 
 // Build an empty record for a fresh chat. Nothing is stored until the first save.
@@ -36,20 +45,20 @@ export function startConversation(id: string): Conversation {
   };
 }
 
-// Add the record, or replace the stored one, and note when it changed.
-export async function saveConversation(conversation: Conversation): Promise<Conversation> {
-  const conversations = await readConversations();
-  const savedConversation = { ...conversation, updatedAt: new Date().toISOString() };
-  const index = conversations.findIndex((item) => item.id === conversation.id);
+// Add the row, or replace the stored one, and note when it changed.
+export async function saveConversation(db: Db, conversation: Conversation): Promise<void> {
+  const { error } = await db.from("conversations").upsert(toRow(conversation, new Date().toISOString()));
 
-  if (index === -1) {
-    conversations.push(savedConversation);
-  } else {
-    conversations[index] = savedConversation;
-  }
+  if (error) throw error;
+}
 
-  await writeConversations(conversations);
-  return savedConversation;
+// Remove one chat. Returns false when no row was deleted: it does not exist, or it belongs to someone else.
+export async function deleteConversation(db: Db, id: string): Promise<boolean> {
+  const { data, error } = await db.from("conversations").delete().eq("id", id).select("id");
+
+  if (error) throw error;
+
+  return data.length > 0;
 }
 
 // Select the chat history and metadata, leaving the agent context on the server.
@@ -63,18 +72,27 @@ export function toBrowserConversation(conversation: Conversation): BrowserConver
   };
 }
 
-// A missing file just means no chat has been saved yet.
-async function readConversations(): Promise<Conversation[]> {
-  try {
-    const database = JSON.parse(await readFile(CONVERSATIONS_FILE, "utf8")) as { conversations: Conversation[] };
-    return database.conversations;
-  } catch (error: unknown) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return [];
-    throw error;
-  }
+// Database columns are snake_case; the app's record is camelCase.
+export function toConversation(row: ConversationRow): Conversation {
+  return {
+    id: row.id,
+    title: row.title,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    // Only this app writes these columns, so the stored JSON already has these shapes.
+    chatHistory: row.chat_history as unknown as ChatMessage[],
+    contextHistory: row.context_history as unknown as ModelMessage[],
+  };
 }
 
-// Indent the JSON so you can open the file and read what was saved.
-async function writeConversations(conversations: Conversation[]): Promise<void> {
-  await writeFile(CONVERSATIONS_FILE, `${JSON.stringify({ conversations }, null, 2)}\n`);
+// user_id is left out on purpose: the database fills it from the login token, so a request can't pick the owner.
+export function toRow(conversation: Conversation, updatedAt: string): ConversationInsert {
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    created_at: conversation.createdAt,
+    updated_at: updatedAt,
+    chat_history: conversation.chatHistory as unknown as Json,
+    context_history: conversation.contextHistory as unknown as Json,
+  };
 }

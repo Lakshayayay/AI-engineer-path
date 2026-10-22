@@ -8,6 +8,7 @@ interface SidebarProps {
   inert: boolean;
   closeButtonRef: Ref<HTMLButtonElement>;
   onOpenConversation: (id: string) => void;
+  onDeleteConversation: (id: string) => void;
   onNewConversation: () => void;
   onClose: () => void;
 }
@@ -20,6 +21,7 @@ export function Sidebar({
   inert,
   closeButtonRef,
   onOpenConversation,
+  onDeleteConversation,
   onNewConversation,
   onClose,
 }: SidebarProps) {
@@ -70,18 +72,37 @@ export function Sidebar({
             const isActive = summary.id === activeConversationId;
 
             return (
-              <button
-                key={summary.id}
-                type="button"
-                className={`conversation-link${isActive ? " active" : ""}`}
-                // Long titles are cut off by CSS; the tooltip shows the full text.
-                title={summary.title}
-                aria-current={isActive ? "true" : undefined}
-                disabled={disabled}
-                onClick={() => onOpenConversation(summary.id)}
-              >
-                {summary.title}
-              </button>
+              <div key={summary.id} className="conversation-row">
+                <button
+                  type="button"
+                  className={`conversation-link${isActive ? " active" : ""}`}
+                  // Long titles are cut off by CSS; the tooltip shows the full text.
+                  title={summary.title}
+                  aria-current={isActive ? "true" : undefined}
+                  disabled={disabled}
+                  onClick={() => onOpenConversation(summary.id)}
+                >
+                  {summary.title}
+                </button>
+                <button
+                  type="button"
+                  className="icon-button delete-conversation"
+                  aria-label={`Delete chat ${summary.title}`}
+                  title="Delete chat"
+                  disabled={disabled}
+                  onClick={() => onDeleteConversation(summary.id)}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
             );
           })}
         </nav>

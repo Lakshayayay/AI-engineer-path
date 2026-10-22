@@ -1,57 +1,47 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { startConversation, toBrowserConversation, toConversation, toRow } from "./conversations";
 
-let tempDir: string;
+const ROW = {
+  id: "11111111-1111-4111-8111-111111111111",
+  user_id: "99999999-9999-4999-8999-999999999999",
+  title: "Notion swaps",
+  chat_history: [
+    { role: "user", content: "Replace Notion" },
+    { role: "assistant", content: "Try AppFlowy." },
+  ],
+  context_history: [{ role: "user", content: "Replace Notion" }],
+  created_at: "2026-10-22T10:00:00+00:00",
+  updated_at: "2026-10-22T11:00:00+00:00",
+};
 
-// The store reads its file path once on import, so point it at a temp folder before loading it.
-async function loadStore() {
-  vi.resetModules();
-  return import("./conversations");
-}
-
-describe("conversations store", () => {
-  beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), "openswap-"));
-    await mkdir(path.join(tempDir, "data"));
-    vi.spyOn(process, "cwd").mockReturnValue(tempDir);
+describe("conversations store mapping", () => {
+  it("turns a database row into the app's conversation record", () => {
+    expect(toConversation(ROW)).toEqual({
+      id: ROW.id,
+      title: "Notion swaps",
+      createdAt: ROW.created_at,
+      updatedAt: ROW.updated_at,
+      chatHistory: ROW.chat_history,
+      contextHistory: ROW.context_history,
+    });
   });
 
-  afterEach(async () => {
-    vi.restoreAllMocks();
-    await rm(tempDir, { recursive: true, force: true });
+  it("turns a conversation into a row without choosing the owner", () => {
+    const conversation = { ...startConversation(ROW.id), title: "Notion swaps" };
+
+    const row = toRow(conversation, "2026-10-22T12:00:00.000Z");
+
+    expect(row).toMatchObject({ id: ROW.id, title: "Notion swaps", updated_at: "2026-10-22T12:00:00.000Z" });
+    // The database fills user_id from the login token, so a request can never save a chat as someone else.
+    expect(row).not.toHaveProperty("user_id");
   });
 
-  it("lists nothing before the first save", async () => {
-    const store = await loadStore();
-
-    expect(await store.listConversations()).toEqual([]);
-  });
-
-  it("stores only after save, and lists newest activity first", async () => {
-    const store = await loadStore();
-    const first = store.startConversation("11111111-1111-4111-8111-111111111111");
-    const second = store.startConversation("22222222-2222-4222-8222-222222222222");
-
-    expect(await store.getConversation(first.id)).toBeNull();
-
-    await store.saveConversation({ ...first, title: "First" });
-    await store.saveConversation({ ...second, title: "Second" });
-    // Saving again replaces the record and moves it to the top.
-    await store.saveConversation({ ...first, title: "First again" });
-
-    const titles = (await store.listConversations()).map((summary) => summary.title);
-    expect(titles).toEqual(["First again", "Second"]);
-  });
-
-  it("never sends the model context to the browser", async () => {
-    const store = await loadStore();
+  it("never sends the model context to the browser", () => {
     const conversation = {
-      ...store.startConversation("33333333-3333-4333-8333-333333333333"),
+      ...startConversation("33333333-3333-4333-8333-333333333333"),
       contextHistory: [{ role: "user" as const, content: "secret context" }],
     };
 
-    expect(store.toBrowserConversation(conversation)).not.toHaveProperty("contextHistory");
+    expect(toBrowserConversation(conversation)).not.toHaveProperty("contextHistory");
   });
 });

@@ -1,16 +1,19 @@
-import type { UIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
+import type { OpenSwapUIMessage } from "@/lib/types";
 import { formatPromptForDisplay } from "./prompt-format";
+import { getSources } from "./sources";
+import { isToolPart } from "./tool-step-text";
+import { ToolStep } from "./tool-steps";
 
 interface MessageListProps {
-  messages: UIMessage[];
+  messages: OpenSwapUIMessage[];
   // The agent is working; shows the loader row below the transcript.
   isLoading: boolean;
   loadingLabel: string;
   errorMessage: string | null;
 }
 
-// The transcript: the user's lines, the agent's Markdown answers, the loader and any error.
+// The transcript: the user's lines, the agent's tool steps and Markdown answers, the loader and any error.
 export function MessageList({ messages, isLoading, loadingLabel, errorMessage }: MessageListProps) {
   // With nothing to show yet, the starter screen is enough.
   if (messages.length === 0 && !isLoading && !errorMessage) return null;
@@ -25,14 +28,17 @@ export function MessageList({ messages, isLoading, loadingLabel, errorMessage }:
             </div>
           ) : (
             <div key={message.id} className="history-turn assistant-turn">
-              {message.parts.map((part, index) =>
-                part.type === "text" ? (
-                  // react-markdown never renders raw HTML, so model output can't inject markup.
-                  <ReactMarkdown key={index} components={{ a: ExternalLink }}>
+              {message.parts.map((part, index) => {
+                if (isToolPart(part)) return <ToolStep key={part.toolCallId} part={part} />;
+
+                // react-markdown never renders raw HTML, so model output can't inject markup.
+                return part.type === "text" ? (
+                  <ReactMarkdown key={`text-${index}`} components={{ a: ExternalLink }}>
                     {part.text}
                   </ReactMarkdown>
-                ) : null,
-              )}
+                ) : null;
+              })}
+              <SourceList message={message} />
             </div>
           ),
         )}
@@ -61,6 +67,26 @@ export function MessageList({ messages, isLoading, loadingLabel, errorMessage }:
   );
 }
 
+// The web pages behind an answer. Only a live answer has them; a reopened chat is saved as plain text.
+function SourceList({ message }: { message: OpenSwapUIMessage }) {
+  const sources = getSources(message.parts);
+
+  if (sources.length === 0) return null;
+
+  return (
+    <div className="sources">
+      <h3>Sources</h3>
+      <ul>
+        {sources.map((source) => (
+          <li key={source.url}>
+            <ExternalLink href={source.url}>{source.label}</ExternalLink>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // Model-written links open in a new tab and can't reach back into this page.
 function ExternalLink({ href, children }: { href?: string; children?: React.ReactNode }) {
   return (
@@ -70,6 +96,6 @@ function ExternalLink({ href, children }: { href?: string; children?: React.Reac
   );
 }
 
-function getText(message: UIMessage): string {
+function getText(message: OpenSwapUIMessage): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
 }

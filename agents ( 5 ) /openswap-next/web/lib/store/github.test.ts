@@ -54,4 +54,45 @@ describe("checkHealth", () => {
 
     expect(result).toMatchObject({ status: "error", retryable: true });
   });
+
+  it("checks a project found on the web by its owner/name repo", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ archived: true }))
+      .mockResolvedValueOnce(jsonResponse([{ commit: { committer: { date: new Date().toISOString() } } }]))
+      .mockResolvedValueOnce(jsonResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await checkHealth({ projectName: "Widgetly", githubRepo: "acme/widgetly" });
+
+    expect(result.status).toBe("ok");
+    expect(result.result).toMatchObject({ repo: "acme/widgetly", archived: true });
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.github.com/repos/acme/widgetly");
+  });
+
+  it("prefers the catalog repo over a repo the model supplies", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({}))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await checkHealth({ projectName: "OpenHands", githubRepo: "someone-else/other-repo" });
+
+    expect(fetchMock.mock.calls[0][0]).toContain("/repos/all-hands-ai/openhands");
+  });
+
+  it.each(["acme", "acme/widget/extra", "acme/..", "../widget", "acme/widget?x=1", "https://github.com/acme/widget"])(
+    "rejects the repo %s without calling GitHub",
+    async (githubRepo) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await checkHealth({ projectName: "Widgetly", githubRepo });
+
+      expect(result.status).toBe("no_results");
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 });

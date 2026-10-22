@@ -1,8 +1,9 @@
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { connection } from "next/server";
 import { ChatController } from "@/components/chat/chat-controller";
 import { listConversations } from "@/lib/store/conversations";
 import { getStarterSwapOptions } from "@/lib/store/swaps";
+import { authenticate } from "@/lib/supabase/server";
 
 export default function Page() {
   return (
@@ -12,9 +13,21 @@ export default function Page() {
   );
 }
 
-// Saved chats change on every request, so wait for a real request before reading them.
+// Reading the login cookie makes this page run per request, which also keeps one user's chats from reaching another.
 async function Chat() {
-  await connection();
+  const auth = await authenticate();
 
-  return <ChatController starterSwapNames={getStarterSwapOptions()} initialSummaries={await listConversations()} />;
+  // The proxy already redirects signed-out visitors; this is the real check behind it.
+  if (!auth) redirect("/login");
+
+  const { db, user } = auth;
+
+  return (
+    <ChatController
+      // Send the browser only what it displays, not the user id.
+      account={{ name: user.name, email: user.email }}
+      starterSwapNames={getStarterSwapOptions()}
+      initialSummaries={await listConversations(db)}
+    />
+  );
 }

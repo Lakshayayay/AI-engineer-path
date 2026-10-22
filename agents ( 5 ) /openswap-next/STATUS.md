@@ -36,6 +36,11 @@ All paths under `agents ( 5 ) /openswap-next/web/`. Old equivalents under `agent
 | 5 | List and reopen | `app/api/conversations/route.ts`, `app/api/conversations/[id]/route.ts` | the GET/POST conversation routes | Not started |
 | 6 | Frontend, high level | `app/page.tsx`, `components/chat/*` | `frontend/` | Not started |
 | 7 | Glue: env, tests | `lib/env.ts`, `instrumentation.ts`, `*.test.ts` | `environment.js` | Not started |
+| 8 | Auth: Google sign-in through Supabase | `proxy.ts`, `lib/supabase/*`, `app/login/page.tsx`, `app/auth/*/route.ts` | none (new) | Built. Not yet run end to end (needs the new Supabase project and Google client). |
+| 9 | Per-user store: Postgres, Row Level Security, delete chat | `supabase/schema.sql`, `lib/store/conversations.ts` (rewritten), `lib/supabase/database.types.ts` | `store/conversations.js` (JSON file) | Built. Rows 3, 5 and 6 above now describe the Supabase version. |
+| 10 | Personalization: saved preferences in the instructions | `lib/store/profiles.ts`, `app/api/profile/route.ts`, `app/settings/page.tsx`, `components/settings/settings-form.tsx`, `withPreferences` in `lib/agent/prompts.ts` | none (new) | Built |
+| 11 | New tools: web search, Discord, GitHub repo for web finds | `lib/agent/tools.ts`, `lib/store/discord.ts`, `lib/store/github.ts` | none (new) | Built. Web search and Discord not yet tried against the real services. |
+| 12 | UI: dark theme, tool step cards, sources, account menu | `app/globals.css`, `components/chat/tool-steps.tsx`, `tool-step-text.ts`, `sources.ts`, `brand-header.tsx` | `frontend/` | Built. Signed-in screens checked only with fake data. |
 
 ## What we learned so far
 
@@ -72,4 +77,5 @@ Stack versions in `web/package.json` (carets allow minor updates): `ai ^7.0.148`
 
 ## Housekeeping
 
-- `openswap-next/api/` is untracked and holds a `.env` and `node_modules`. It is not committed. Add a `.gitignore` before anyone commits it, and decide what it is for.
+- `openswap-next/api/` is untracked build output of an old NestJS app (no source). Decided: delete it. The delete was blocked during the upgrade build, so it is still there: run `rm -rf "openswap-next/api"` from `agents ( 5 )`. Its `.env` has empty values, so nothing is lost.
+- The Supabase connection in Claude was still pointed at the old PopChoice project when the upgrade was built. Reconnect it to the new project before applying `web/supabase/schema.sql`, and regenerate `web/lib/supabase/database.types.ts` (it is hand-written for now).

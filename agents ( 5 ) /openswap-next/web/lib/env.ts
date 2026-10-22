@@ -7,6 +7,9 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().min(1),
   AI_MODEL: z.string().min(1),
   GITHUB_TOKEN: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  NEXT_PUBLIC_SUPABASE_URL: z.url(),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
+  DISCORD_WEBHOOK_URL: z.preprocess(emptyToUndefined, z.url().optional()),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -28,6 +31,9 @@ export function logEnv(): void {
   console.log("[env] OPENAI_API_KEY: set");
   if (!env.GITHUB_TOKEN) {
     console.warn("[env] GITHUB_TOKEN not set: GitHub health checks use the low anonymous rate limit.");
+  }
+  if (!env.DISCORD_WEBHOOK_URL) {
+    console.warn("[env] DISCORD_WEBHOOK_URL not set: the send_to_discord tool will tell the user Discord isn't set up.");
   }
 }
 

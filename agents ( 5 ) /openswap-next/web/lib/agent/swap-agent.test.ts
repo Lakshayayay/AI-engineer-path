@@ -2,6 +2,7 @@ import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import { simulateReadableStream, type ModelMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { systemPrompt } from "./prompts";
 
 const FINAL_ANSWER = "Here is what I could verify.";
 
@@ -28,7 +29,7 @@ const toolHungryModel = new MockLanguageModelV4({
                 type: "tool-call",
                 toolCallId: `call-${options.prompt.length}`,
                 toolName: "check_health",
-                input: JSON.stringify({ project_name: "Not A Project" }),
+                input: JSON.stringify({ project_name: "Not A Project", github_repo: null }),
               },
               { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, usage },
             ],
@@ -37,7 +38,11 @@ const toolHungryModel = new MockLanguageModelV4({
   },
 });
 
-vi.mock("@ai-sdk/openai", () => ({ createOpenAI: () => () => toolHungryModel }));
+// Keep the real provider tools (web search) and swap only the model for the fake one.
+vi.mock("@ai-sdk/openai", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@ai-sdk/openai")>()),
+  createOpenAI: () => () => toolHungryModel,
+}));
 
 describe("streamSwapAgent", () => {
   beforeEach(() => {
@@ -53,6 +58,7 @@ describe("streamSwapAgent", () => {
     const result = streamSwapAgent({
       contextHistory: [],
       userPrompt: "Replace Notion",
+      preferences: "",
       onComplete: async (completed) => {
         saved = completed;
       },
@@ -67,4 +73,42 @@ describe("streamSwapAgent", () => {
     expect(saved?.contextHistory[0]).toEqual({ role: "user", content: "Replace Notion" });
     expect(saved?.contextHistory.some((message) => message.role === "tool")).toBe(true);
   });
+
+  it("puts the user's preferences into the instructions of every step, including the final answer", async () => {
+    const { streamSwapAgent } = await import("./swap-agent");
+
+    const result = streamSwapAgent({
+      contextHistory: [],
+      userPrompt: "Replace Notion",
+      preferences: "Only self-hosted, MIT license.",
+      onComplete: async () => {},
+    });
+    await result.consumeStream();
+
+    const systemTexts = toolHungryModel.doStreamCalls.map(getSystemText);
+    expect(systemTexts).toHaveLength(6);
+    for (const text of systemTexts) expect(text).toContain("<preferences>\nOnly self-hosted, MIT license.\n</preferences>");
+    // The last step still carries the final-answer rule.
+    expect(systemTexts.at(-1)).toContain("maximum number of turns");
+  });
+
+  it("leaves the instructions alone when the user has no preferences", async () => {
+    const { streamSwapAgent } = await import("./swap-agent");
+
+    const result = streamSwapAgent({
+      contextHistory: [],
+      userPrompt: "Replace Notion",
+      preferences: "",
+      onComplete: async () => {},
+    });
+    await result.consumeStream();
+
+    expect(getSystemText(toolHungryModel.doStreamCalls[0])).toBe(systemPrompt);
+  });
 });
+
+// The instructions the fake model received for one step.
+function getSystemText(call: { prompt: Array<{ role: string; content: unknown }> }): string {
+  const system = call.prompt.find((message) => message.role === "system");
+  return typeof system?.content === "string" ? system.content : "";
+}

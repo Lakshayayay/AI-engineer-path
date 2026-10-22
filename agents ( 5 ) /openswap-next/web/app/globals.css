@@ -1,14 +1,20 @@
 :root {
-  --bg-main: #313338;
-  --surface-selected: #3a3d44;
-  --surface-raised: #232428;
-  --surface-panel: #1e1f22;
-  --ink-main: #f2f3f5;
-  --ink-soft: #b5bac1;
-  --line: #3f4147;
-  --brand: #5865f2;
-  --brand-text: #9aa7ff;
-  --brand-soft: rgba(88, 101, 242, 0.14);
+  --bg-main: #0e1512;
+  --surface-selected: #1b2a24;
+  --surface-raised: #141d19;
+  --surface-panel: #0a100d;
+  --ink-main: #e7efe9;
+  --ink-soft: #9fb0a6;
+  --ink-strong: #f6fbf8;
+  --line: #24302a;
+  --brand: #0f766e;
+  --brand-text: #5eead4;
+  --brand-soft: rgba(94, 234, 212, 0.14);
+  --on-brand: #ffffff;
+  --link-visited: #c4b5fd;
+  --danger: #fca5a5;
+  --focus-ring: #e7efe9;
+  --surface-focus: #111a16;
   --radius-xl: 16px;
   --radius-lg: 16px;
   --radius-sm: 999px;
@@ -60,7 +66,7 @@ button {
   flex: none;
   padding: 4px;
   border-radius: 8px;
-  color: #ffffff;
+  color: var(--on-brand);
   background: var(--brand);
 }
 
@@ -105,7 +111,7 @@ button {
   border-radius: var(--radius-sm);
   cursor: pointer;
   background: var(--brand);
-  color: #ffffff;
+  color: var(--on-brand);
   font-weight: 600;
   font-size: 1.02rem;
 }
@@ -124,7 +130,7 @@ button {
 .submit-button:focus-visible,
 .swap-card:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgba(242, 243, 245, 0.92);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -194,7 +200,7 @@ textarea {
 }
 
 textarea:focus-visible {
-  background: #23252a;
+  background: var(--surface-focus);
 }
 
 .form-footer {
@@ -251,11 +257,11 @@ textarea:focus-visible {
 .output-content h4 {
   margin-top: 1rem;
   margin-bottom: 0.45rem;
-  color: #ffffff;
+  color: var(--ink-strong);
 }
 
 .output-content li::marker {
-  color: #949ba4;
+  color: var(--ink-soft);
 }
 
 .output-shell.visible {
@@ -275,20 +281,20 @@ textarea:focus-visible {
 }
 
 .output-content a {
-  color: #9aa7ff;
+  color: var(--brand-text);
   font-weight: 600;
-  text-decoration-color: rgba(154, 167, 255, 0.45);
+  text-decoration-color: var(--brand-soft);
   text-underline-offset: 0.16em;
 }
 
 .output-content a:hover,
 .output-content a:focus-visible {
-  color: #ffffff;
+  color: var(--ink-strong);
   text-decoration-color: var(--brand);
 }
 
 .output-content a:visited {
-  color: #c2b8ff;
+  color: var(--link-visited);
 }
 
 .output-content ul,
@@ -334,7 +340,7 @@ textarea:focus-visible {
   content: "";
   position: absolute;
   inset: 0;
-  border: 2px solid rgba(154, 167, 255, 0.18);
+  border: 2px solid var(--brand-soft);
   border-top-color: var(--brand-text);
   border-radius: 50%;
   animation: spin 650ms cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
@@ -587,13 +593,13 @@ textarea:focus-visible {
 }
 
 .error-turn {
-  color: #f9a8a8;
+  color: var(--danger);
 }
 
 .icon-button:focus-visible,
 .new-conversation:focus-visible,
 .conversation-link:focus-visible {
-  outline: 2px solid rgba(242, 243, 245, 0.92);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -641,12 +647,273 @@ textarea:focus-visible {
   .history-toggle {
     display: inline-grid;
   }
-
-  .history-toggle {
-    margin-left: auto;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .conversation-sidebar, .sidebar-backdrop { transition: none; }
+}
+
+/* --- Sign-in screen --- */
+.auth-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.auth-card {
+  width: min(400px, 100%);
+  padding: 32px 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+}
+
+.auth-card h1 {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.auth-lead {
+  margin: 8px 0 22px;
+  color: var(--ink-soft);
+}
+
+.auth-error {
+  margin-bottom: 16px;
+  color: var(--danger);
+}
+
+.google-button {
+  width: 100%;
+  gap: 10px;
+}
+
+.google-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* --- Account menu (a native popover opened from the header) --- */
+.account-trigger {
+  margin-left: auto;
+  width: 40px;
+  min-height: 40px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--on-brand);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.account-trigger:hover {
+  background: var(--brand);
+  color: var(--on-brand);
+  filter: brightness(0.9);
+}
+
+/* No display value here: the browser hides a closed popover with display: none. */
+.account-menu {
+  inset: 64px 16px auto auto;
+  min-width: 220px;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--ink-main);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.account-name {
+  padding: 6px 10px 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.account-email {
+  padding: 0 10px 6px;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.account-item {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--ink-main);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+}
+
+.account-item:hover {
+  background: var(--surface-selected);
+}
+
+.account-item:focus-visible,
+.account-trigger:focus-visible,
+.delete-conversation:focus-visible,
+.back-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* --- Saved chats: a title button with a delete button beside it --- */
+/* One column that fits the list, so a long title is cut by its own ellipsis instead of widening the row. */
+.conversation-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.conversation-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.conversation-row .conversation-link {
+  flex: 1;
+}
+
+.delete-conversation {
+  width: 36px;
+  min-height: 36px;
+  flex: none;
+}
+
+.delete-conversation svg {
+  width: 18px;
+  height: 18px;
+}
+
+.delete-conversation:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.delete-conversation:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* --- Tool steps and sources inside an answer --- */
+.tool-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.tool-step-icon {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.tool-step.is-done .tool-step-icon {
+  color: var(--brand-text);
+}
+
+.tool-step.is-error {
+  color: var(--danger);
+}
+
+.tool-step-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--brand-soft);
+  border-top-color: var(--brand-text);
+  border-radius: 50%;
+  animation: spin 650ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-step-spinner {
+    animation: none;
+  }
+}
+
+.sources {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.sources h3 {
+  margin-top: 0;
+  margin-bottom: 4px;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sources ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+/* --- Settings page --- */
+.settings-shell {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.settings-shell h1 {
+  font-size: 1.75rem;
+  line-height: 1.1;
+}
+
+.back-link {
+  width: fit-content;
+  color: var(--brand-text);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.field-hint {
+  margin: 0 2px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.field-hint.counter {
+  text-align: right;
+}
+
+.settings-shell .form-footer {
+  justify-content: space-between;
+}
+
+.save-status {
+  color: var(--brand-text);
+  font-size: 0.95rem;
+}
+
+.save-status.is-error {
+  color: var(--danger);
 }

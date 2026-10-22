@@ -1,8 +1,9 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState } from "react";
+import type { OpenSwapUIMessage } from "@/lib/types";
 import { readErrorMessage } from "./api-client";
 import { Composer } from "./composer";
 import { MessageList } from "./message-list";
@@ -10,7 +11,7 @@ import { buildPrompt } from "./prompt-format";
 import { StarterSwaps } from "./starter-swaps";
 
 // The server keeps the model context, so each request carries only the chat id and the new text.
-const transport = new DefaultChatTransport({
+const transport = new DefaultChatTransport<OpenSwapUIMessage>({
   api: "/api/chat",
   prepareSendMessagesRequest: ({ id, messages }) => ({
     body: { conversationId: id, userPrompt: getText(messages.at(-1)) },
@@ -20,11 +21,13 @@ const transport = new DefaultChatTransport({
 const STATUS_LABELS: Record<string, string> = {
   "tool-search_swaps": "Searching the catalog...",
   "tool-check_health": "Checking project health...",
+  "tool-web_search": "Searching the web...",
+  "tool-send_to_discord": "Sending to Discord...",
 };
 
 interface ChatSessionProps {
   chatId: string;
-  initialMessages: UIMessage[];
+  initialMessages: OpenSwapUIMessage[];
   starterSwapNames: string[];
   onBusyChange: (isBusy: boolean) => void;
   onTurnFinished: () => void;
@@ -42,9 +45,9 @@ export function ChatSession({
   const [selectedSwapNames, setSelectedSwapNames] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // The transcript as it was before the last send, so a failed turn can be taken back off the screen.
-  const messagesBeforeSend = useRef<UIMessage[]>(initialMessages);
+  const messagesBeforeSend = useRef<OpenSwapUIMessage[]>(initialMessages);
 
-  const { messages, setMessages, sendMessage, status } = useChat({
+  const { messages, setMessages, sendMessage, status } = useChat<OpenSwapUIMessage>({
     id: chatId,
     messages: initialMessages,
     transport,
@@ -122,13 +125,13 @@ function getSubmitLabel(isFollowUp: boolean, selectedCount: number): string {
 }
 
 // While a tool runs, say which one. Otherwise keep the plain label.
-function getLoadingLabel(messages: UIMessage[]): string {
+function getLoadingLabel(messages: OpenSwapUIMessage[]): string {
   const lastMessage = messages.at(-1);
   const lastPart = lastMessage?.role === "assistant" ? lastMessage.parts.at(-1) : undefined;
 
   return (lastPart && STATUS_LABELS[lastPart.type]) ?? "Loading...";
 }
 
-function getText(message: UIMessage | undefined): string {
+function getText(message: OpenSwapUIMessage | undefined): string {
   return message?.parts.map((part) => (part.type === "text" ? part.text : "")).join("") ?? "";
 }

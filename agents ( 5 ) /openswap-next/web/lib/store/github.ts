@@ -7,6 +7,9 @@ const RELEASE_WINDOW_DAYS = 90;
 const RELEASES_PER_PAGE = 100;
 const MILLIS_PER_DAY = 1000 * 60 * 60 * 24;
 
+// "owner/name" as GitHub allows it. The lookahead refuses "." and "..", so the value can't climb out of /repos/.
+const REPO_PATH_PATTERN = /^[A-Za-z0-9-]{1,39}\/(?!\.{1,2}$)[A-Za-z0-9_.-]{1,100}$/;
+
 // The few GitHub fields we read. Everything else is ignored.
 interface GitHubRepo {
   archived?: boolean;
@@ -52,13 +55,23 @@ type RepoHealthLookup =
   | { ok: false; statusCode: number };
 
 // The agent passes the model's check_health arguments into this function.
-export async function checkHealth({ projectName }: { projectName: string }): Promise<ToolResult<RepoHealth>> {
+export async function checkHealth({
+  projectName,
+  githubRepo,
+}: {
+  projectName: string;
+  githubRepo?: string | null;
+}): Promise<ToolResult<RepoHealth>> {
   // Find the catalog entry so we can connect its display name to a GitHub repo.
   const swap = findSwapByProjectName(projectName);
 
   if (!swap) {
+    // A project found on the web has no catalog entry. Trust the model's repo only once it looks like owner/name,
+    // because it becomes part of the GitHub URL path.
+    if (githubRepo && REPO_PATH_PATTERN.test(githubRepo)) return reportHealth(githubRepo, projectName);
+
     return noResults(
-      `Project doesn't exist in the OpenSwap database: ${projectName}. Try again with another official name for the project before answering.`,
+      `Project doesn't exist in the OpenSwap database: ${projectName}. Try again with another official name for the project before answering. For a project found on the web, pass its GitHub repo as owner/name.`,
     );
   }
 
@@ -68,10 +81,14 @@ export async function checkHealth({ projectName }: { projectName: string }): Pro
     return noResults(`"${swap.name}" has no GitHub repo on record, so it can't be health-checked.`);
   }
 
-  // Fetch the repository first, then its latest commit and recent releases.
+  return reportHealth(repoPath, swap.name);
+}
+
+// Fetch the repository first, then its latest commit and recent releases, and word the result for the model.
+async function reportHealth(repoPath: string, displayName: string): Promise<ToolResult<RepoHealth>> {
   const lookup = await getRepoHealth(repoPath);
 
-  if (!lookup.ok) return describeGitHubFailure(lookup.statusCode, swap.name);
+  if (!lookup.ok) return describeGitHubFailure(lookup.statusCode, displayName);
 
   const { health, releasesOk } = lookup;
   const releaseSummary = releasesOk
@@ -80,7 +97,7 @@ export async function checkHealth({ projectName }: { projectName: string }): Pro
 
   return okResult(
     health,
-    `${swap.name}: last commit ${formatAgo(health.days_since_last_commit)}, ${releaseSummary}.` +
+    `${displayName}: last commit ${formatAgo(health.days_since_last_commit)}, ${releaseSummary}.` +
       (releasesOk ? "" : " Release data was unavailable, so it is missing from the result."),
   );
 }

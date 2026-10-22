@@ -1,9 +1,14 @@
 "use client";
 
-import type { UIMessage } from "ai";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { ConversationSummary } from "@/lib/types";
-import { fetchConversation, fetchConversationSummaries, readErrorMessage, toUIMessages } from "./api-client";
+import type { AccountSummary, ConversationSummary, OpenSwapUIMessage } from "@/lib/types";
+import {
+  deleteConversation,
+  fetchConversation,
+  fetchConversationSummaries,
+  readErrorMessage,
+  toUIMessages,
+} from "./api-client";
 import { BrandHeader } from "./brand-header";
 import { ChatSession } from "./chat-session";
 import { Sidebar } from "./sidebar";
@@ -12,6 +17,7 @@ import { Sidebar } from "./sidebar";
 const MOBILE_QUERY = "(max-width: 760px)";
 
 interface ChatControllerProps {
+  account: AccountSummary;
   starterSwapNames: string[];
   initialSummaries: ConversationSummary[];
 }
@@ -19,15 +25,16 @@ interface ChatControllerProps {
 // The chat on screen. A fresh chat has a new id but is stored only when its first message is sent.
 interface ActiveChat {
   id: string;
-  messages: UIMessage[];
+  messages: OpenSwapUIMessage[];
 }
 
 // Owns the chat list, which chat is open and the mobile drawer. Each chat's own state lives in ChatSession.
-export function ChatController({ starterSwapNames, initialSummaries }: ChatControllerProps) {
+export function ChatController({ account, starterSwapNames, initialSummaries }: ChatControllerProps) {
   const [summaries, setSummaries] = useState(initialSummaries);
   const [activeChat, setActiveChat] = useState<ActiveChat>(() => freshChat());
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const isMobile = useIsMobile();
   // The drawer exists only on small screens, so a wider screen counts as closed.
@@ -77,6 +84,26 @@ export function ChatController({ starterSwapNames, initialSummaries }: ChatContr
     setSidebarOpen(false);
   }
 
+  // Ask first, because a deleted chat can't be brought back. Deleting the open chat starts a fresh one.
+  async function removeConversation(id: string) {
+    if (isBusy || isDeleting) return;
+
+    const title = summaries.find((summary) => summary.id === id)?.title ?? "this chat";
+    if (!window.confirm(`Delete "${title}"? This can't be undone.`)) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteConversation(id);
+      setSummaries((current) => current.filter((summary) => summary.id !== id));
+      setLoadError(null);
+      if (id === activeChat.id) setActiveChat(freshChat());
+    } catch (error: unknown) {
+      setLoadError(readErrorMessage(error));
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   // The server names the chat, so reload the list to show the new title and order.
   const refreshSummaries = useCallback(async () => {
     try {
@@ -91,17 +118,23 @@ export function ChatController({ starterSwapNames, initialSummaries }: ChatContr
       <Sidebar
         summaries={summaries}
         activeConversationId={summaries.some((summary) => summary.id === activeChat.id) ? activeChat.id : null}
-        disabled={isBusy}
+        disabled={isBusy || isDeleting}
         inert={isMobile && !drawerOpen}
         closeButtonRef={closeRef}
         onOpenConversation={openConversation}
+        onDeleteConversation={removeConversation}
         onNewConversation={startNewChat}
         onClose={() => setSidebarOpen(false)}
       />
 
       {/* While the drawer is open, the page behind it can't take focus. */}
       <main className="app-shell" inert={drawerOpen}>
-        <BrandHeader sidebarOpen={drawerOpen} onOpenSidebar={() => setSidebarOpen(true)} toggleRef={toggleRef} />
+        <BrandHeader
+          account={account}
+          sidebarOpen={drawerOpen}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          toggleRef={toggleRef}
+        />
 
         {loadError && <div className="history-turn error-turn">{loadError}</div>}
 
